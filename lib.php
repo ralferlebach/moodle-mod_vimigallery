@@ -45,6 +45,29 @@ function vimigallery_supports($feature) {
 }
 
 /**
+ * Build the source adapter for a gallery, or null for uploaded maps.
+ *
+ * @param stdClass $gallery The gallery instance record.
+ * @return \mod_vimigallery\source\source_interface|null The adapter, or null.
+ */
+function vimigallery_make_source($gallery) {
+    switch ($gallery->sourcetype) {
+        case 'datafield':
+            return new \mod_vimigallery\source\datafield_source(
+                (int) $gallery->sourcecmid,
+                (int) $gallery->sourcefieldid
+            );
+        case 'qtype':
+            return new \mod_vimigallery\source\qtype_source(
+                (int) $gallery->sourcecmid,
+                $gallery->sourcemode
+            );
+        default:
+            return null;
+    }
+}
+
+/**
  * Resolve the chosen source selection into the stored source columns.
  *
  * @param stdClass $data The form data (modified in place).
@@ -57,6 +80,9 @@ function vimigallery_prepare_source_fields($data) {
     if (empty($data->freshness)) {
         $data->freshness = 'live';
     }
+    if (empty($data->sourcemode)) {
+        $data->sourcemode = 'reference';
+    }
     $data->sourcecmid = 0;
     $data->sourcefieldid = 0;
     if ($data->sourcetype === 'datafield' && !empty($data->datafieldsource)) {
@@ -65,6 +91,8 @@ function vimigallery_prepare_source_fields($data) {
             $data->sourcecmid = (int) $parts[0];
             $data->sourcefieldid = (int) $parts[1];
         }
+    } else if ($data->sourcetype === 'qtype' && !empty($data->qtypesource)) {
+        $data->sourcecmid = (int) $data->qtypesource;
     }
 }
 
@@ -166,22 +194,19 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
     $gallery = $DB->get_record('vimigallery', ['id' => $galleryid], '*', MUST_EXIST);
     $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
 
-    // Datafield source: materialise for static/snapshot; live keeps no items.
-    if ($gallery->sourcetype === 'datafield') {
+    // Activity sources: materialise for static/snapshot; live keeps no items.
+    $source = vimigallery_make_source($gallery);
+    if ($source !== null) {
         if ($gallery->freshness === 'live') {
             return;
         }
-        $source = new \mod_vimigallery\source\datafield_source(
-            (int) $gallery->sourcecmid,
-            (int) $gallery->sourcefieldid
-        );
         $sortorder = 0;
         foreach ($source->get_items() as $sourceitem) {
             $DB->insert_record('vimigallery_item', (object) [
                 'galleryid' => $galleryid,
                 'sortorder' => $sortorder++,
                 'visible' => 1,
-                'sourcetype' => 'datafield',
+                'sourcetype' => $gallery->sourcetype,
                 'profile' => $sourceitem->profile,
                 'mapjson' => $sourceitem->mapjson,
                 'authorname' => $sourceitem->authorname,
@@ -235,6 +260,21 @@ function vimigallery_list_datafield_sources($courseid) {
             $key = $cm->id . ':' . $field->id;
             $options[$key] = format_string($cm->name) . ': ' . format_string($field->name);
         }
+    }
+    return $options;
+}
+
+/**
+ * List the Quiz activities available as gallery sources in a course.
+ *
+ * @param int $courseid The course id.
+ * @return array Map of cmid => quiz name.
+ */
+function vimigallery_list_quiz_sources($courseid) {
+    $options = [];
+    $modinfo = get_fast_modinfo($courseid);
+    foreach ($modinfo->get_instances_of('quiz') as $cm) {
+        $options[$cm->id] = format_string($cm->name);
     }
     return $options;
 }

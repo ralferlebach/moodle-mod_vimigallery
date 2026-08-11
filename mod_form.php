@@ -55,6 +55,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->addElement('select', 'sourcetype', get_string('sourcetype', 'mod_vimigallery'), [
             'upload' => get_string('source_upload', 'mod_vimigallery'),
             'datafield' => get_string('source_datafield', 'mod_vimigallery'),
+            'qtype' => get_string('source_qtype', 'mod_vimigallery'),
         ]);
         $mform->setDefault('sourcetype', 'upload');
         $mform->addHelpButton('sourcetype', 'sourcetype', 'mod_vimigallery');
@@ -84,6 +85,22 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->addHelpButton('datafieldsource', 'datafieldsource', 'mod_vimigallery');
         $mform->hideIf('datafieldsource', 'sourcetype', 'neq', 'datafield');
 
+        // Qtype source: a Quiz activity containing ViMi Pad questions.
+        $quizsources = vimigallery_list_quiz_sources($COURSE->id);
+        if (empty($quizsources)) {
+            $quizsources = ['' => get_string('noquizzes', 'mod_vimigallery')];
+        }
+        $mform->addElement('select', 'qtypesource', get_string('qtypesource', 'mod_vimigallery'), $quizsources);
+        $mform->addHelpButton('qtypesource', 'qtypesource', 'mod_vimigallery');
+        $mform->hideIf('qtypesource', 'sourcetype', 'neq', 'qtype');
+
+        $mform->addElement('select', 'sourcemode', get_string('sourcemode', 'mod_vimigallery'), [
+            'reference' => get_string('sourcemode_reference', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('sourcemode', 'reference');
+        $mform->addHelpButton('sourcemode', 'sourcemode', 'mod_vimigallery');
+        $mform->hideIf('sourcemode', 'sourcetype', 'neq', 'qtype');
+
         $mform->addElement('select', 'freshness', get_string('freshness', 'mod_vimigallery'), [
             'live' => get_string('freshness_live', 'mod_vimigallery'),
             'static' => get_string('freshness_static', 'mod_vimigallery'),
@@ -91,7 +108,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         ]);
         $mform->setDefault('freshness', 'live');
         $mform->addHelpButton('freshness', 'freshness', 'mod_vimigallery');
-        $mform->hideIf('freshness', 'sourcetype', 'neq', 'datafield');
+        $mform->hideIf('freshness', 'sourcetype', 'eq', 'upload');
 
         // Display options.
         $mform->addElement('header', 'displayheader', get_string('displayheader', 'mod_vimigallery'));
@@ -139,6 +156,9 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         if (!empty($this->current->sourcecmid) && !empty($this->current->sourcefieldid)) {
             $defaultvalues['datafieldsource'] =
                 $this->current->sourcecmid . ':' . $this->current->sourcefieldid;
+        }
+        if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'qtype') {
+            $defaultvalues['qtypesource'] = $this->current->sourcecmid;
         }
     }
 }

@@ -17,6 +17,7 @@
         <FIELD NAME="sourcecmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="course module id of the source activity (datafield: the mod_data cm)"/>
         <FIELD NAME="sourcefieldid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="source field id (datafield: the vimipad data field)"/>
         <FIELD NAME="freshness" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="live" SEQUENCE="false" COMMENT="live | static | snapshot"/>
+        <FIELD NAME="sourcemode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="reference" SEQUENCE="false" COMMENT="qtype/vimipad: reference | submissions"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

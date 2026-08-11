@@ -26,7 +26,21 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.3 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.4 - 2026-08-11
+
+### Added
+- Qtype source: a gallery can draw the model solutions of the ViMi Pad questions
+  of a Quiz activity (reference mode). Model solutions are shown live only to
+  users who may grade the quiz; a teacher can publish them to everyone via a
+  static/snapshot freshness.
+- New source mode setting and a shared source factory covering datafield and
+  qtype. Schema: sourcemode column with an upgrade step.
+
+### Note
+- Qtype submissions mode (learners attempt responses) is planned as a separate
+  step (it involves the quiz attempt data model).
+
+## 0.2.3 - 2026-08-11
 
 ### Added
 - Source adapters: a gallery can now draw its maps from a Database (mod_data)

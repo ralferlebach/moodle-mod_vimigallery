@@ -144,4 +144,39 @@ final class source_test extends \advanced_testcase {
         $source = new datafield_source($cm->id, 0);
         $this->assertSame([], $source->get_items($teacher->id));
     }
+
+    /**
+     * Reference mode exposes model solutions only to users who may grade.
+     *
+     * @return void
+     */
+    public function test_qtype_reference_visibility(): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+
+        $course = $gen->create_course();
+        $quiz = $gen->create_module('quiz', ['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('quiz', $quiz->id);
+
+        /** @var \core_question_generator $qgen */
+        $qgen = $gen->get_plugin_generator('core_question');
+        $cat = $qgen->create_question_category();
+        $question = $qgen->create_question('vimipad', 'stub', ['category' => $cat->id]);
+
+        // Give the question a model solution and place it in the quiz.
+        $DB->set_field('qtype_vimipad_options', 'referencemap', $this->map(), ['questionid' => $question->id]);
+        quiz_add_quiz_question($question->id, $quiz);
+
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+        $student = $gen->create_and_enrol($course, 'student');
+
+        $source = new \mod_vimigallery\source\qtype_source($cm->id, 'reference');
+
+        // A grader sees the model solution.
+        $this->assertCount(1, $source->get_items($teacher->id));
+        // A student does not.
+        $this->assertCount(0, $source->get_items($student->id));
+    }
 }
