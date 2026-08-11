@@ -26,7 +26,13 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.6 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.7 - 2026-08-11
+
+### Added
+- Drag-and-drop reordering on the arrange page (core/sortable_list) persisted via a
+  new mod_vimigallery_reorder web service. The up/down links remain as an accessible,
+  no-JavaScript fallback. New curation::set_order operation.
+## 0.2.6 - 2026-08-11
 
 ### Added
 - Arrange (curation) page for teachers (mod/vimigallery:manageitems): reorder maps,

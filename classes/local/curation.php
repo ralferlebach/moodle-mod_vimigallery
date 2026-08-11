@@ -107,6 +107,38 @@ class curation {
     }
 
     /**
+     * Persist an explicit item order given a list of item ids.
+     *
+     * Only ids belonging to the gallery are honoured; any of the gallery's items
+     * not listed are appended after, keeping their relative order.
+     *
+     * @param int $galleryid The gallery instance id.
+     * @param int[] $itemids The desired item order.
+     * @return void
+     */
+    public static function set_order(int $galleryid, array $itemids): void {
+        global $DB;
+        $existing = $DB->get_records(
+            'vimigallery_item',
+            ['galleryid' => $galleryid],
+            'sortorder ASC, id ASC'
+        );
+        $ordered = [];
+        foreach ($itemids as $id) {
+            $id = (int) $id;
+            if (isset($existing[$id])) {
+                $ordered[$id] = $existing[$id];
+            }
+        }
+        foreach ($existing as $id => $row) {
+            if (!isset($ordered[$id])) {
+                $ordered[$id] = $row;
+            }
+        }
+        self::write_order(array_values($ordered));
+    }
+
+    /**
      * Persist the given item ordering as contiguous sort orders.
      *
      * @param \stdClass[] $items The items in the desired order.

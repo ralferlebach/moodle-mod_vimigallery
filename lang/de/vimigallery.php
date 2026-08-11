@@ -25,6 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['arrange'] = 'Maps anordnen';
+$string['arrange_help'] = 'Ziehen Sie eine Map am Griff, um sie umzusortieren, oder nutzen Sie die Pfeile. Blenden Sie Maps aus, die Lernende nicht sehen sollen.';
 $string['author'] = 'Autor';
 $string['backtogallery'] = 'Zurück zur Galerie';
 $string['datafieldsource'] = 'Datenbankfeld';

@@ -120,4 +120,47 @@ final class curation_test extends \advanced_testcase {
         curation::set_visible($galleryid + 999, $ids[1], false);
         $this->assertEquals(1, $DB->get_field('vimigallery_item', 'visible', ['id' => $ids[1]]));
     }
+    /**
+     * set_order applies an explicit order and appends any omitted items.
+     *
+     * @return void
+     */
+    public function test_set_order(): void {
+        $this->resetAfterTest();
+        [$galleryid, $ids] = $this->make_items(3);
+
+        // Reverse the order explicitly.
+        curation::set_order($galleryid, [$ids[2], $ids[1], $ids[0]]);
+        $this->assertSame([$ids[2], $ids[1], $ids[0]], $this->order($galleryid));
+
+        // An omitted id is appended after the listed ones.
+        curation::set_order($galleryid, [$ids[1]]);
+        $this->assertSame($ids[1], $this->order($galleryid)[0]);
+        $this->assertCount(3, $this->order($galleryid));
+    }
+
+    /**
+     * The reorder web service checks capability and persists the order.
+     *
+     * @return void
+     */
+    public function test_reorder_external(): void {
+        $this->resetAfterTest();
+        [$galleryid, $ids] = $this->make_items(3);
+
+        global $DB;
+        $cm = get_coursemodule_from_instance('vimigallery', $galleryid);
+
+        $this->setAdminUser();
+        $result = \mod_vimigallery\external\reorder::execute($cm->id, [$ids[2], $ids[0], $ids[1]]);
+        $this->assertTrue($result['status']);
+        $this->assertSame([$ids[2], $ids[0], $ids[1]], $this->order($galleryid));
+
+        // A user without the capability is refused.
+        $courserec = get_course($cm->course);
+        $student = $this->getDataGenerator()->create_and_enrol($courserec, 'student');
+        $this->setUser($student);
+        $this->expectException(\required_capability_exception::class);
+        \mod_vimigallery\external\reorder::execute($cm->id, [$ids[0]]);
+    }
 }

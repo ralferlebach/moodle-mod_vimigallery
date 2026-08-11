@@ -25,6 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['arrange'] = 'Arrange maps';
+$string['arrange_help'] = 'Drag a map by its handle to reorder, or use the up/down arrows. Hide maps you do not want learners to see.';
 $string['author'] = 'Author';
 $string['backtogallery'] = 'Back to the gallery';
 $string['datafieldsource'] = 'Database field';

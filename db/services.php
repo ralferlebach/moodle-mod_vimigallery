@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version details for mod_vimigallery.
+ * External function definitions for mod_vimigallery.
  *
  * @package    mod_vimigallery
  * @copyright  2026 Ralf Erlebach
@@ -24,11 +24,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'mod_vimigallery';
-$plugin->version      = 2026081108;
-$plugin->release      = '0.2.7';
-$plugin->requires     = 2024100700;
-$plugin->maturity     = MATURITY_ALPHA;
-$plugin->dependencies = [
-    'mod_vimipad' => 2026080810,
+$functions = [
+    'mod_vimigallery_reorder' => [
+        'classname' => 'mod_vimigallery\external\reorder',
+        'methodname' => 'execute',
+        'description' => 'Persist a curated order of the maps in a gallery.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimigallery:manageitems',
+    ],
 ];

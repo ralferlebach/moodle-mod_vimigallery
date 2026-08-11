@@ -98,17 +98,19 @@ if (empty($items)) {
     exit;
 }
 
-$table = new html_table();
-$table->head = [
-    get_string('order', 'mod_vimigallery'),
-    get_string('author', 'mod_vimigallery'),
-    get_string('profile', 'mod_vimigallery'),
-    get_string('visible', 'mod_vimigallery'),
-    '',
-];
+$PAGE->requires->js_call_amd('mod_vimigallery/arrange', 'init', [$cm->id]);
+
+echo html_writer::tag('p', get_string('arrange_help', 'mod_vimigallery'), ['class' => 'text-muted small']);
 
 $last = count($items) - 1;
+$rows = '';
 foreach ($items as $pos => $item) {
+    $handle = html_writer::tag(
+        'span',
+        $OUTPUT->pix_icon('i/dragdrop', get_string('move')),
+        ['class' => 'vimigallery-drag-handle', 'title' => get_string('move')]
+    );
+
     $up = ($pos > 0)
         ? html_writer::link(
             new moodle_url($pageurl, ['action' => 'up', 'item' => $item->id, 'sesskey' => sesskey()]),
@@ -134,17 +136,21 @@ foreach ($items as $pos => $item) {
         );
     }
 
-    $rowclass = $item->visible ? '' : 'dimmed_text';
-    $row = new html_table_row([
-        (string) ($pos + 1),
-        s($item->authorname),
-        s($item->profile),
-        $vis,
-        $up . ' ' . $down,
-    ]);
-    $row->attributes['class'] = $rowclass;
-    $table->data[] = $row;
+    $label = html_writer::tag(
+        'span',
+        s($item->authorname !== '' ? $item->authorname : $item->profile),
+        ['class' => 'vimigallery-arrange-label']
+    );
+    $meta = html_writer::tag('span', s($item->profile), ['class' => 'text-muted small ml-2']);
+    $controls = html_writer::tag('span', $vis . ' ' . $up . ' ' . $down, ['class' => 'vimigallery-arrange-controls float-right']);
+
+    $rowclass = 'vimigallery-arrange-item list-group-item' . ($item->visible ? '' : ' dimmed_text');
+    $rows .= html_writer::tag(
+        'li',
+        $handle . ' ' . $label . $meta . $controls,
+        ['class' => $rowclass, 'data-itemid' => $item->id]
+    );
 }
 
-echo html_writer::table($table);
+echo html_writer::tag('ul', $rows, ['class' => 'vimigallery-arrange-list list-group']);
 echo $OUTPUT->footer();
