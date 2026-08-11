@@ -36,6 +36,9 @@ class qtype_source implements source_interface {
     /** Reference (model solution) mode. */
     public const MODE_REFERENCE = 'reference';
 
+    /** Learner submissions mode. */
+    public const MODE_SUBMISSIONS = 'submissions';
+
     /** @var int The course module id of the source quiz. */
     protected int $cmid;
 
@@ -64,10 +67,6 @@ class qtype_source implements source_interface {
 
         $userid = $userid ?? (int) $USER->id;
 
-        if ($this->mode !== self::MODE_REFERENCE) {
-            return [];
-        }
-
         $cm = get_coursemodule_from_id('quiz', $this->cmid, 0, false, IGNORE_MISSING);
         if (!$cm) {
             return [];
@@ -77,6 +76,11 @@ class qtype_source implements source_interface {
             return [];
         }
         $context = \context_module::instance($cm->id);
+
+        if ($this->mode === self::MODE_SUBMISSIONS) {
+            return $this->submission_items($cm, $context, $userid);
+        }
+
         // A model solution reveals the answer, so only graders may see it live.
         if (!has_capability('mod/quiz:grade', $context, $userid)) {
             return [];
@@ -123,6 +127,162 @@ class qtype_source implements source_interface {
             $items[] = $item;
         }
 
+        return $items;
+    }
+
+    /**
+     * The submitted vimipad answers of a quiz, as the viewer may see them.
+     *
+     * A learner sees only their own finished attempts; a viewer with report or
+     * grade access sees everyone's, restricted to their own groups under separate
+     * groups.
+     *
+     * @param \stdClass $cm The quiz course module.
+     * @param \context_module $context The quiz context.
+     * @param int $userid The viewer.
+     * @return \stdClass[] The visible submitted maps.
+     */
+    protected function submission_items($cm, $context, int $userid): array {
+        global $DB;
+
+        $slots = $this->quiz_vimipad_slots($cm->instance);
+        if (empty($slots)) {
+            return [];
+        }
+
+        $canviewall = has_capability('mod/quiz:viewreports', $context, $userid)
+            || has_capability('mod/quiz:grade', $context, $userid);
+
+        $params = ['quizid' => $cm->instance, 'state' => 'finished'];
+        $where = ['quiz = :quizid', 'state = :state', 'preview = 0'];
+
+        if (!$canviewall) {
+            $where[] = 'userid = :owner';
+            $params['owner'] = $userid;
+        } else if (
+            groups_get_activity_groupmode($cm) == SEPARATEGROUPS
+                && !has_capability('moodle/site:accessallgroups', $context, $userid)
+        ) {
+            $allowed = $this->group_peer_userids($cm->course, $userid);
+            if (empty($allowed)) {
+                return [];
+            }
+            [$insql, $inparams] = $DB->get_in_or_equal($allowed, SQL_PARAMS_NAMED, 'u');
+            $where[] = "userid $insql";
+            $params += $inparams;
+        }
+
+        $attempts = $DB->get_records_select(
+            'quiz_attempts',
+            implode(' AND ', $where),
+            $params,
+            'timefinish ASC, id ASC',
+            'id, userid, uniqueid'
+        );
+
+        $entries = [];
+        $usercache = [];
+        foreach ($attempts as $attempt) {
+            try {
+                $quba = \question_engine::load_questions_usage_by_activity($attempt->uniqueid);
+            } catch (\Exception $e) {
+                continue;
+            }
+            foreach ($slots as $slot => $questionid) {
+                $qa = $quba->get_question_attempt($slot);
+                if (!$qa) {
+                    continue;
+                }
+                $mapjson = $qa->get_last_qt_var('answer');
+                if ($mapjson === null || trim((string) $mapjson) === '') {
+                    continue;
+                }
+                if (!isset($usercache[$attempt->userid])) {
+                    $user = \core_user::get_user($attempt->userid, '*', IGNORE_MISSING);
+                    $usercache[$attempt->userid] = $user ? fullname($user) : '';
+                }
+                $entries[] = (object) ['mapjson' => $mapjson, 'authorname' => $usercache[$attempt->userid]];
+            }
+        }
+
+        return $this->normalise_entries($entries);
+    }
+
+    /**
+     * The user ids sharing at least one group with the viewer.
+     *
+     * @param int $courseid The course id.
+     * @param int $userid The viewer.
+     * @return int[] The peer user ids (including the viewer).
+     */
+    protected function group_peer_userids(int $courseid, int $userid): array {
+        $groups = groups_get_user_groups($courseid, $userid)[0] ?? [];
+        $ids = [$userid => $userid];
+        foreach ($groups as $groupid) {
+            foreach (groups_get_members($groupid, 'u.id') as $member) {
+                $ids[$member->id] = (int) $member->id;
+            }
+        }
+        return array_values($ids);
+    }
+
+    /**
+     * The vimipad slots of a quiz mapped to their question ids.
+     *
+     * @param int $quizid The quiz instance id.
+     * @return array<int,int> Map of slot number => question id.
+     */
+    protected function quiz_vimipad_slots(int $quizid): array {
+        global $DB;
+        $sql = "SELECT qs.slot, q.id AS questionid
+                  FROM {quiz_slots} qs
+                  JOIN {question_references} qr
+                        ON qr.itemid = qs.id
+                       AND qr.component = 'mod_quiz'
+                       AND qr.questionarea = 'slot'
+                  JOIN {question_bank_entries} qbe ON qbe.id = qr.questionbankentryid
+                  JOIN {question_versions} qv ON qv.questionbankentryid = qbe.id
+                  JOIN {question} q ON q.id = qv.questionid
+                 WHERE qs.quizid = :quizid
+                       AND q.qtype = 'vimipad'
+                       AND qv.version = (
+                            SELECT MAX(v.version)
+                              FROM {question_versions} v
+                             WHERE v.questionbankentryid = qbe.id
+                       )
+              ORDER BY qs.slot ASC";
+        $slots = [];
+        foreach ($DB->get_records_sql($sql, ['quizid' => $quizid]) as $row) {
+            $slots[(int) $row->slot] = (int) $row->questionid;
+        }
+        return $slots;
+    }
+
+    /**
+     * Normalise and validate raw {mapjson, authorname} entries into items.
+     *
+     * @param \stdClass[] $entries The raw entries.
+     * @return \stdClass[] The valid items in order.
+     */
+    protected function normalise_entries(array $entries): array {
+        $items = [];
+        $sortorder = 0;
+        foreach ($entries as $entry) {
+            $decoded = json_decode($entry->mapjson, true);
+            if (!is_array($decoded) || !isset($decoded['nodes'])) {
+                continue;
+            }
+            $profile = isset($decoded['profile']) && is_string($decoded['profile'])
+                ? $decoded['profile'] : 'conceptmap';
+            $item = new \stdClass();
+            $item->id = 'qs' . $sortorder;
+            $item->mapjson = $entry->mapjson;
+            $item->profile = \core_text::substr($profile, 0, 40);
+            $item->authorname = \core_text::substr($entry->authorname, 0, 255);
+            $item->sortorder = $sortorder++;
+            $item->visible = 1;
+            $items[] = $item;
+        }
         return $items;
     }
 

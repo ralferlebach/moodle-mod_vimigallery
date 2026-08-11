@@ -77,6 +77,27 @@ final class source_test extends \advanced_testcase {
     }
 
     /**
+     * Have a user complete a quiz attempt answering the first slot with a map.
+     *
+     * @param \stdClass $quiz The quiz instance.
+     * @param int $userid The attempting user.
+     * @param string $map The map JSON answer.
+     * @return void
+     */
+    private function submit_attempt(\stdClass $quiz, int $userid, string $map): void {
+        $quizobj = \mod_quiz\quiz_settings::create($quiz->id, $userid);
+        $quba = \question_engine::make_questions_usage_by_activity('mod_quiz', $quizobj->get_context());
+        $quba->set_preferred_behaviour($quizobj->get_quiz()->preferredbehaviour);
+        $timenow = time();
+        $attempt = quiz_create_attempt($quizobj, 1, false, $timenow, false, $userid);
+        quiz_start_new_attempt($quizobj, $quba, $attempt, 1, $timenow);
+        quiz_attempt_save_started($quizobj, $quba, $attempt);
+        $attemptobj = \mod_quiz\quiz_attempt::create($attempt->id);
+        $attemptobj->process_submitted_actions($timenow, false, [1 => ['answer' => $map]]);
+        $attemptobj->process_finish($timenow, false);
+    }
+
+    /**
      * Unapproved entries are hidden from ordinary viewers but visible to owners
      * and to users who may approve.
      *
@@ -263,5 +284,39 @@ final class source_test extends \advanced_testcase {
 
         $this->assertCount(1, $source->get_items($teacher->id));
         $this->assertCount(0, $source->get_items($student->id));
+    }
+    /**
+     * Qtype submissions: learners see only their own; graders see all.
+     *
+     * @covers \mod_vimigallery\source\qtype_source
+     * @return void
+     */
+    public function test_qtype_submissions_visibility(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+
+        $course = $gen->create_course();
+        $quizgen = $gen->get_plugin_generator('mod_quiz');
+        $quiz = $quizgen->create_instance(['course' => $course->id, 'grade' => 100.0, 'sumgrades' => 1]);
+        $cm = get_coursemodule_from_instance('quiz', $quiz->id);
+
+        $qgen = $gen->get_plugin_generator('core_question');
+        $cat = $qgen->create_question_category();
+        $question = $qgen->create_question('vimipad', 'stub', ['category' => $cat->id]);
+        quiz_add_quiz_question($question->id, $quiz);
+
+        $student1 = $gen->create_and_enrol($course, 'student');
+        $student2 = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+
+        $this->submit_attempt($quiz, (int) $student1->id, $this->map());
+
+        $source = new \mod_vimigallery\source\qtype_source($cm->id, 'submissions');
+
+        $this->assertCount(1, $source->get_items($teacher->id));
+        $this->assertCount(1, $source->get_items($student1->id));
+        $this->assertCount(0, $source->get_items($student2->id));
     }
 }

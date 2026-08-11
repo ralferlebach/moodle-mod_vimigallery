@@ -26,7 +26,14 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.7 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.8 - 2026-08-11
+
+### Added
+- Qtype submissions mode: a gallery can show the learners submitted maps from the
+  vimipad questions of a Quiz. Visibility follows the quiz: a learner sees only
+  their own finished attempts; a viewer with report/grade access sees everyone, and
+  under separate groups only their own groups. Completes both qtype modes.
+## 0.2.7 - 2026-08-11
 
 ### Added
 - Drag-and-drop reordering on the arrange page (core/sortable_list) persisted via a
