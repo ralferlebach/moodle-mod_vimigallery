@@ -1,0 +1,21 @@
+/* mod_vimigallery album styles. */
+.vimigallery {
+    position: relative;
+}
+.vimigallery:focus {
+    outline: 2px solid var(--primary, #0f6cbf);
+    outline-offset: 2px;
+}
+.vimigallery-editor {
+    width: 100%;
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 0.25rem;
+}
+.vimigallery-controls .vimigallery-counter {
+    min-width: 4em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.vimigallery-slide[hidden] {
+    display: none;
+}

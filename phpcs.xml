@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<ruleset name="mod_vimigallery">
+    <description>PHPCS configuration for mod_vimigallery.</description>
+    <rule ref="moodle"/>
+    <exclude-pattern>*/tools/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/amd/build/*</exclude-pattern>
+</ruleset>
