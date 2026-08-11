@@ -13,6 +13,10 @@
         <FIELD NAME="displaymode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="page" SEQUENCE="false" COMMENT="page (link) or course (embedded, no link)"/>
         <FIELD NAME="showtabs" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="1 to show the map/list tabs"/>
         <FIELD NAME="showauthors" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 to show author names"/>
+        <FIELD NAME="sourcetype" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="upload" SEQUENCE="false" COMMENT="upload | datafield"/>
+        <FIELD NAME="sourcecmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="course module id of the source activity (datafield: the mod_data cm)"/>
+        <FIELD NAME="sourcefieldid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="source field id (datafield: the vimipad data field)"/>
+        <FIELD NAME="freshness" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="live" SEQUENCE="false" COMMENT="live | static | snapshot"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

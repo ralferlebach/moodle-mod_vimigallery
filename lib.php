@@ -45,6 +45,30 @@ function vimigallery_supports($feature) {
 }
 
 /**
+ * Resolve the chosen source selection into the stored source columns.
+ *
+ * @param stdClass $data The form data (modified in place).
+ * @return void
+ */
+function vimigallery_prepare_source_fields($data) {
+    if (empty($data->sourcetype)) {
+        $data->sourcetype = 'upload';
+    }
+    if (empty($data->freshness)) {
+        $data->freshness = 'live';
+    }
+    $data->sourcecmid = 0;
+    $data->sourcefieldid = 0;
+    if ($data->sourcetype === 'datafield' && !empty($data->datafieldsource)) {
+        $parts = explode(':', $data->datafieldsource);
+        if (count($parts) === 2) {
+            $data->sourcecmid = (int) $parts[0];
+            $data->sourcefieldid = (int) $parts[1];
+        }
+    }
+}
+
+/**
  * Add a new gallery instance.
  *
  * @param stdClass $data The form data.
@@ -54,6 +78,7 @@ function vimigallery_supports($feature) {
 function vimigallery_add_instance($data, $mform = null) {
     global $DB;
 
+    vimigallery_prepare_source_fields($data);
     $data->timemodified = time();
     $data->id = $DB->insert_record('vimigallery', $data);
 
@@ -74,6 +99,7 @@ function vimigallery_add_instance($data, $mform = null) {
 function vimigallery_update_instance($data, $mform = null) {
     global $DB;
 
+    vimigallery_prepare_source_fields($data);
     $data->id = $data->instance;
     $data->timemodified = time();
     $DB->update_record('vimigallery', $data);
@@ -137,10 +163,37 @@ function vimigallery_save_source_files($data, context_module $context) {
 function vimigallery_rebuild_items($galleryid, context_module $context) {
     global $DB;
 
+    $gallery = $DB->get_record('vimigallery', ['id' => $galleryid], '*', MUST_EXIST);
+    $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
+
+    // Datafield source: materialise for static/snapshot; live keeps no items.
+    if ($gallery->sourcetype === 'datafield') {
+        if ($gallery->freshness === 'live') {
+            return;
+        }
+        $source = new \mod_vimigallery\source\datafield_source(
+            (int) $gallery->sourcecmid,
+            (int) $gallery->sourcefieldid
+        );
+        $sortorder = 0;
+        foreach ($source->get_items() as $sourceitem) {
+            $DB->insert_record('vimigallery_item', (object) [
+                'galleryid' => $galleryid,
+                'sortorder' => $sortorder++,
+                'visible' => 1,
+                'sourcetype' => 'datafield',
+                'profile' => $sourceitem->profile,
+                'mapjson' => $sourceitem->mapjson,
+                'authorname' => $sourceitem->authorname,
+                'timecreated' => time(),
+            ]);
+        }
+        return;
+    }
+
+    // Upload source (default): one frozen item per stored JSON file.
     $fs = get_file_storage();
     $files = $fs->get_area_files($context->id, 'mod_vimigallery', 'source', 0, 'filename', false);
-
-    $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
 
     $sortorder = 0;
     foreach ($files as $file) {
@@ -163,6 +216,27 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
             'timecreated' => time(),
         ]);
     }
+}
+
+/**
+ * List the ViMi Pad database fields available as gallery sources in a course.
+ *
+ * @param int $courseid The course id.
+ * @return array Map of "cmid:fieldid" => "Database name: Field name".
+ */
+function vimigallery_list_datafield_sources($courseid) {
+    global $DB;
+
+    $options = [];
+    $modinfo = get_fast_modinfo($courseid);
+    foreach ($modinfo->get_instances_of('data') as $cm) {
+        $fields = $DB->get_records('data_fields', ['dataid' => $cm->instance, 'type' => 'vimipad'], 'name ASC');
+        foreach ($fields as $field) {
+            $key = $cm->id . ':' . $field->id;
+            $options[$key] = format_string($cm->name) . ': ' . format_string($field->name);
+        }
+    }
+    return $options;
 }
 
 /**

@@ -51,6 +51,18 @@ class gallery implements renderable {
      */
     public function get_items(): array {
         global $DB;
+
+        // A live datafield source is read fresh, per viewer, honouring the source
+        // database's access rules. Uploads and materialised (static/snapshot)
+        // sources come from the stored items.
+        if ($this->instance->sourcetype === 'datafield' && $this->instance->freshness === 'live') {
+            $source = new \mod_vimigallery\source\datafield_source(
+                (int) $this->instance->sourcecmid,
+                (int) $this->instance->sourcefieldid
+            );
+            return $source->get_items();
+        }
+
         return array_values($DB->get_records(
             'vimigallery_item',
             ['galleryid' => $this->instance->id, 'visible' => 1],

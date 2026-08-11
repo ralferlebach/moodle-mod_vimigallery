@@ -36,6 +36,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
      * @return void
      */
     public function definition() {
+        global $COURSE;
         $mform = $this->_form;
 
         $mform->addElement('header', 'general', get_string('general', 'form'));
@@ -50,6 +51,15 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         // Sources.
         $mform->addElement('header', 'sourceheader', get_string('sourceheader', 'mod_vimigallery'));
         $mform->setExpanded('sourceheader');
+
+        $mform->addElement('select', 'sourcetype', get_string('sourcetype', 'mod_vimigallery'), [
+            'upload' => get_string('source_upload', 'mod_vimigallery'),
+            'datafield' => get_string('source_datafield', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('sourcetype', 'upload');
+        $mform->addHelpButton('sourcetype', 'sourcetype', 'mod_vimigallery');
+
+        // Upload source: one or more exported JSON maps.
         $mform->addElement(
             'filemanager',
             'vimijson',
@@ -58,6 +68,30 @@ class mod_vimigallery_mod_form extends moodleform_mod {
             ['subdirs' => 0, 'maxfiles' => 200, 'accepted_types' => ['.json']]
         );
         $mform->addHelpButton('vimijson', 'sourcefiles', 'mod_vimigallery');
+        $mform->hideIf('vimijson', 'sourcetype', 'neq', 'upload');
+
+        // Datafield source: a ViMi Pad field of a Database activity in this course.
+        $datafieldsources = vimigallery_list_datafield_sources($COURSE->id);
+        if (empty($datafieldsources)) {
+            $datafieldsources = ['' => get_string('nodatafields', 'mod_vimigallery')];
+        }
+        $mform->addElement(
+            'select',
+            'datafieldsource',
+            get_string('datafieldsource', 'mod_vimigallery'),
+            $datafieldsources
+        );
+        $mform->addHelpButton('datafieldsource', 'datafieldsource', 'mod_vimigallery');
+        $mform->hideIf('datafieldsource', 'sourcetype', 'neq', 'datafield');
+
+        $mform->addElement('select', 'freshness', get_string('freshness', 'mod_vimigallery'), [
+            'live' => get_string('freshness_live', 'mod_vimigallery'),
+            'static' => get_string('freshness_static', 'mod_vimigallery'),
+            'snapshot' => get_string('freshness_snapshot', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('freshness', 'live');
+        $mform->addHelpButton('freshness', 'freshness', 'mod_vimigallery');
+        $mform->hideIf('freshness', 'sourcetype', 'neq', 'datafield');
 
         // Display options.
         $mform->addElement('header', 'displayheader', get_string('displayheader', 'mod_vimigallery'));
@@ -101,6 +135,10 @@ class mod_vimigallery_mod_form extends moodleform_mod {
                 ['subdirs' => 0, 'maxfiles' => 200, 'accepted_types' => ['.json']]
             );
             $defaultvalues['vimijson'] = $draftitemid;
+        }
+        if (!empty($this->current->sourcecmid) && !empty($this->current->sourcefieldid)) {
+            $defaultvalues['datafieldsource'] =
+                $this->current->sourcecmid . ':' . $this->current->sourcefieldid;
         }
     }
 }

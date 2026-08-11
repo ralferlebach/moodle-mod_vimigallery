@@ -24,14 +24,22 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['datafieldsource'] = 'Database field';
+$string['datafieldsource_help'] = 'Choose a ViMi Pad field of a Database activity in this course. Its entries become the maps in this gallery, following the access rules of that database.';
 $string['displayheader'] = 'Display';
 $string['displaymode'] = 'Display';
 $string['displaymode_course'] = 'On the course page (embedded, no link)';
 $string['displaymode_help'] = 'On the course page embeds the gallery directly in the section, like a label. On a separate page shows a link and description, like a page resource.';
 $string['displaymode_page'] = 'On a separate page (link and description)';
+$string['freshness'] = 'Freshness';
+$string['freshness_help'] = 'Live reads the current entries every time the gallery is viewed. Static and snapshot store a copy of the current maps when you save the activity; refresh them later from the arrange tab.';
+$string['freshness_live'] = 'Live (always current)';
+$string['freshness_snapshot'] = 'Snapshot (stored copy)';
+$string['freshness_static'] = 'Static (stored copy)';
 $string['modulename'] = 'ViMi Gallery';
 $string['modulename_help'] = 'The ViMi Gallery shows one or more ViMi Pad maps read-only. Learners can scroll, zoom and view full screen.';
 $string['modulenameplural'] = 'ViMi Galleries';
+$string['nodatafields'] = 'No ViMi Pad database fields in this course';
 $string['nomaps'] = 'This gallery has no maps yet.';
 $string['pluginadministration'] = 'ViMi Gallery administration';
 $string['pluginname'] = 'ViMi Gallery';
@@ -40,9 +48,13 @@ $string['showauthors'] = 'Show author names';
 $string['showauthors_help'] = 'When enabled, the author name stored with each map is shown above it.';
 $string['showtabs'] = 'Show map/list tabs';
 $string['showtabs_help'] = 'When enabled, viewers can switch each map between the graphical and the list view.';
+$string['source_datafield'] = 'A Database activity field';
+$string['source_upload'] = 'Uploaded files';
 $string['sourcefiles'] = 'Map files (JSON)';
 $string['sourcefiles_help'] = 'Upload one or more exported ViMi Pad maps as JSON files. Each file becomes one map in the gallery.';
 $string['sourceheader'] = 'Maps';
+$string['sourcetype'] = 'Map source';
+$string['sourcetype_help'] = 'Uploaded files: one or more exported JSON maps. A Database activity field: the ViMi Pad values stored across the entries of a Database activity.';
 $string['vimigallery:addinstance'] = 'Add a new ViMi Gallery';
 $string['vimigallery:manageitems'] = 'Curate the maps in a ViMi Gallery';
 $string['vimigallery:view'] = 'View a ViMi Gallery';

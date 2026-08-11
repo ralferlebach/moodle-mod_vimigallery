@@ -26,4 +26,18 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.3 - 2026-08-11
+
+### Added
+- Source adapters: a gallery can now draw its maps from a Database (mod_data)
+  activity field (datafield_vimipad) instead of uploads. New source configuration
+  on the activity (source type, database field, freshness).
+- The datafield source strictly follows the source database access rules: the
+  viewer must be able to view its entries, unapproved entries are hidden unless
+  the viewer may approve or owns them, and separate groups are honoured.
+- Freshness: 'live' reads the current entries per viewer at view time; 'static'
+  and 'snapshot' materialise a copy of the maps the teacher can see when the
+  activity is saved. Default is live.
+- Schema: source columns added to the vimigallery table with an upgrade step.
+
+
