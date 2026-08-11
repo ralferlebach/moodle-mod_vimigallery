@@ -56,6 +56,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
             'upload' => get_string('source_upload', 'mod_vimigallery'),
             'datafield' => get_string('source_datafield', 'mod_vimigallery'),
             'qtype' => get_string('source_qtype', 'mod_vimigallery'),
+            'vimipad' => get_string('source_vimipad', 'mod_vimigallery'),
         ]);
         $mform->setDefault('sourcetype', 'upload');
         $mform->addHelpButton('sourcetype', 'sourcetype', 'mod_vimigallery');
@@ -94,12 +95,32 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->addHelpButton('qtypesource', 'qtypesource', 'mod_vimigallery');
         $mform->hideIf('qtypesource', 'sourcetype', 'neq', 'qtype');
 
+        // ViMi Pad source: a ViMi Pad activity in this course.
+        $vimipadsources = vimigallery_list_vimipad_sources($COURSE->id);
+        if (empty($vimipadsources)) {
+            $vimipadsources = ['' => get_string('novimipads', 'mod_vimigallery')];
+        }
+        $mform->addElement('select', 'vimipadsource', get_string('vimipadsource', 'mod_vimigallery'), $vimipadsources);
+        $mform->addHelpButton('vimipadsource', 'vimipadsource', 'mod_vimigallery');
+        $mform->hideIf('vimipadsource', 'sourcetype', 'neq', 'vimipad');
+
+        // ViMi Pad activity source.
+        $vimipadsources = vimigallery_list_vimipad_sources($COURSE->id);
+        if (empty($vimipadsources)) {
+            $vimipadsources = ['' => get_string('novimipads', 'mod_vimigallery')];
+        }
+        $mform->addElement('select', 'vimipadsource', get_string('vimipadsource', 'mod_vimigallery'), $vimipadsources);
+        $mform->addHelpButton('vimipadsource', 'vimipadsource', 'mod_vimigallery');
+        $mform->hideIf('vimipadsource', 'sourcetype', 'neq', 'vimipad');
+
         $mform->addElement('select', 'sourcemode', get_string('sourcemode', 'mod_vimigallery'), [
             'reference' => get_string('sourcemode_reference', 'mod_vimigallery'),
+            'submissions' => get_string('sourcemode_submissions', 'mod_vimigallery'),
         ]);
         $mform->setDefault('sourcemode', 'reference');
         $mform->addHelpButton('sourcemode', 'sourcemode', 'mod_vimigallery');
-        $mform->hideIf('sourcemode', 'sourcetype', 'neq', 'qtype');
+        $mform->hideIf('sourcemode', 'sourcetype', 'eq', 'upload');
+        $mform->hideIf('sourcemode', 'sourcetype', 'eq', 'datafield');
 
         $mform->addElement('select', 'freshness', get_string('freshness', 'mod_vimigallery'), [
             'live' => get_string('freshness_live', 'mod_vimigallery'),
@@ -159,6 +180,12 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         }
         if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'qtype') {
             $defaultvalues['qtypesource'] = $this->current->sourcecmid;
+        }
+        if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'vimipad') {
+            $defaultvalues['vimipadsource'] = $this->current->sourcecmid;
+        }
+        if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'vimipad') {
+            $defaultvalues['vimipadsource'] = $this->current->sourcecmid;
         }
     }
 }

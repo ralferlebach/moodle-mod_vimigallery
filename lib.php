@@ -62,6 +62,12 @@ function vimigallery_make_source($gallery) {
                 (int) $gallery->sourcecmid,
                 $gallery->sourcemode
             );
+        case 'vimipad':
+            return new \mod_vimigallery\source\vimipad_source(
+                (int) $gallery->sourcecmid,
+                $gallery->sourcemode
+            );
+
         default:
             return null;
     }
@@ -93,6 +99,10 @@ function vimigallery_prepare_source_fields($data) {
         }
     } else if ($data->sourcetype === 'qtype' && !empty($data->qtypesource)) {
         $data->sourcecmid = (int) $data->qtypesource;
+    } else if ($data->sourcetype === 'vimipad' && !empty($data->vimipadsource)) {
+        $data->sourcecmid = (int) $data->vimipadsource;
+    } else if ($data->sourcetype === 'vimipad' && !empty($data->vimipadsource)) {
+        $data->sourcecmid = (int) $data->vimipadsource;
     }
 }
 
@@ -274,6 +284,21 @@ function vimigallery_list_quiz_sources($courseid) {
     $options = [];
     $modinfo = get_fast_modinfo($courseid);
     foreach ($modinfo->get_instances_of('quiz') as $cm) {
+        $options[$cm->id] = format_string($cm->name);
+    }
+    return $options;
+}
+
+/**
+ * List the ViMi Pad activities available as gallery sources in a course.
+ *
+ * @param int $courseid The course id.
+ * @return array Map of cmid => activity name.
+ */
+function vimigallery_list_vimipad_sources($courseid) {
+    $options = [];
+    $modinfo = get_fast_modinfo($courseid);
+    foreach ($modinfo->get_instances_of('vimipad') as $cm) {
         $options[$cm->id] = format_string($cm->name);
     }
     return $options;

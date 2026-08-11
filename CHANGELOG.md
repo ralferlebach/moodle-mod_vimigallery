@@ -26,7 +26,37 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.4 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.6 - 2026-08-11
+
+### Added
+- Arrange (curation) page for teachers (mod/vimigallery:manageitems): reorder maps,
+  hide or show individual maps, and refresh a materialised static/snapshot source
+  from its origin. Order and visibility persist. Live sources have no stored items
+  and are not curated. A link to the page appears on the gallery for managers.
+- New curation service (`\mod_vimigallery\local\curation`) with move, visibility
+  and normalise operations.
+## 0.2.5 - 2026-08-11
+
+### Added
+- ViMi Pad source: a gallery can draw from a ViMi Pad activity. Submissions mode
+  shows the submitted maps (a learner sees their own; a grader sees all; separate
+  groups honoured). Reference mode shows the model solution to graders (a teacher
+  may publish it via static/snapshot). The qtype source now also offers the
+  submissions option in the form (qtype submissions extraction remains a later
+  step; qtype currently returns reference only).
+- All three source adapters (datafield, qtype, vimipad) are covered by the shared
+  factory and normalised source interface.
+
+## 0.2.5 - 2026-08-11
+
+### Added
+- mod_vimipad source: a gallery can draw from a ViMi Pad activity, showing either
+  its model solution (reference mode, graders only live) or the submitted maps
+  (submissions mode). Submissions follow the activity access rules: a learner sees
+  only their own and their groups; a grader sees all, subject to separate groups.
+- Completes the three activity source adapters (datafield, qtype, vimipad) behind
+  the shared source factory. The source mode setting now also offers submissions.
+## 0.2.4 - 2026-08-11
 
 ### Added
 - Qtype source: a gallery can draw the model solutions of the ViMi Pad questions

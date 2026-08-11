@@ -52,6 +52,17 @@ $PAGE->set_activity_record($gallery);
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($gallery->name));
 
+if (has_capability('mod/vimigallery:manageitems', $context)) {
+    echo html_writer::div(
+        html_writer::link(
+            new moodle_url('/mod/vimigallery/arrange.php', ['id' => $cm->id]),
+            get_string('arrange', 'mod_vimigallery'),
+            ['class' => 'btn btn-secondary btn-sm']
+        ),
+        'mb-3'
+    );
+}
+
 if (!empty($gallery->intro)) {
     echo $OUTPUT->box(
         format_module_intro('vimigallery', $gallery, $cm->id),

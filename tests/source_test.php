@@ -44,6 +44,39 @@ final class source_test extends \advanced_testcase {
     }
 
     /**
+     * Create a submitted individual workspace with the given map.
+     *
+     * @param int $vimipadid The activity instance id.
+     * @param int $userid The submitting user.
+     * @param int $groupid The group id, or 0 for an individual workspace.
+     * @return void
+     */
+    private function submit(int $vimipadid, int $userid, int $groupid = 0): void {
+        global $DB;
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $vimipadid,
+            'userid' => $groupid ? null : $userid,
+            'groupid' => $groupid ?: null,
+            'name' => '',
+            'currentrevision' => 1,
+            'submittedsnapshotid' => null,
+            'locked' => 0,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+        $sid = $DB->insert_record('vimipad_snapshot', (object) [
+            'workspaceid' => $wsid,
+            'revision' => 1,
+            'snapshotjson' => $this->map(),
+            'submittedby' => $userid,
+            'status' => 1,
+            'cohortjson' => '',
+            'timecreated' => time(),
+        ]);
+        $DB->set_field('vimipad_workspace', 'submittedsnapshotid', $sid, ['id' => $wsid]);
+    }
+
+    /**
      * Unapproved entries are hidden from ordinary viewers but visible to owners
      * and to users who may approve.
      *
@@ -177,6 +210,58 @@ final class source_test extends \advanced_testcase {
         // A grader sees the model solution.
         $this->assertCount(1, $source->get_items($teacher->id));
         // A student does not.
+        $this->assertCount(0, $source->get_items($student->id));
+    }
+    /**
+     * Submissions mode: learners see only their own; graders see all.
+     *
+     * @covers \mod_vimigallery\source\vimipad_source
+     * @return void
+     */
+    public function test_vimipad_submissions_visibility(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+
+        $course = $gen->create_course();
+        $vimipad = $gen->create_module('vimipad', ['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('vimipad', $vimipad->id);
+
+        $student1 = $gen->create_and_enrol($course, 'student');
+        $student2 = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+
+        $this->submit($vimipad->id, $student1->id);
+        $this->submit($vimipad->id, $student2->id);
+
+        $source = new \mod_vimigallery\source\vimipad_source($cm->id, 'submissions');
+
+        $this->assertCount(2, $source->get_items($teacher->id));
+        $this->assertCount(1, $source->get_items($student1->id));
+        $this->assertCount(1, $source->get_items($student2->id));
+    }
+
+    /**
+     * Reference mode: model solution is shown to graders only.
+     *
+     * @covers \mod_vimigallery\source\vimipad_source
+     * @return void
+     */
+    public function test_vimipad_reference_visibility(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+
+        $course = $gen->create_course();
+        $vimipad = $gen->create_module('vimipad', ['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('vimipad', $vimipad->id);
+        $DB->set_field('vimipad', 'referencemapjson', $this->map(), ['id' => $vimipad->id]);
+
+        $student = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+
+        $source = new \mod_vimigallery\source\vimipad_source($cm->id, 'reference');
+
+        $this->assertCount(1, $source->get_items($teacher->id));
         $this->assertCount(0, $source->get_items($student->id));
     }
 }
