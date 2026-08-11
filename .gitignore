@@ -1,4 +1,49 @@
-/vendor/
+# OS artefacts
+.DS_Store
+Thumbs.db
+desktop.ini
+*Zone.Identifier
+
+# IDE
 .idea/
 .vscode/
-*.log
+*.iml
+*.iws
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+yarn.lock
+
+# PHP / Composer
+vendor/
+composer.lock
+
+# AMD build artefacts: these ARE committed. Moodle serves them at runtime and the
+# CI validates them from the repo. amd/src builds viewer.min.js via Moodle's
+# Grunt; the built files must be present in the repository.
+# (Intentionally NOT ignoring amd/build/.)
+
+# moodle-plugin-ci working directories
+ci/
+moodle/
+
+# PHPUnit / coverage
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+*.clover
+
+# Behat screenshots
+behatfaildumps/
+
+# Temporary / backup files
+*.bak
+*.tmp
+*.swp
+*~
+
+# Local developer overrides
+.env
+.env.local
