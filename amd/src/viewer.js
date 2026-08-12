@@ -28,6 +28,7 @@
 
 
 import Ajax from 'core/ajax';
+import {buildCommentElement} from 'mod_vimigallery/logic';
 import Notification from 'core/notification';
 
 /**
@@ -210,17 +211,7 @@ export const init = (rootId, showtabs, cmid, cancomment) => {
                     methodname: 'mod_vimigallery_post_comment',
                     args: {cmid: cmid, itemid: itemid, content: content},
                 }])[0].then((comment) => {
-                    const li = document.createElement('li');
-                    li.className = 'vimigallery-comment';
-                    const meta = document.createElement('span');
-                    meta.className = 'vimigallery-comment-meta text-muted small';
-                    meta.textContent = comment.authorname;
-                    const body = document.createElement('div');
-                    body.className = 'vimigallery-comment-body';
-                    body.textContent = comment.content;
-                    li.appendChild(meta);
-                    li.appendChild(body);
-                    list.appendChild(li);
+                    list.appendChild(buildCommentElement(document, comment));
                     input.value = '';
                     button.disabled = false;
                     return comment;

@@ -28,6 +28,22 @@ env:
   VIMIPAD_REF: development
 
 jobs:
+  # ── Jest: dependency-free gallery JS logic (scroll coupling, comment DOM) ──
+  jest:
+    name: "Jest (gallery JS logic)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies and run Jest
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
 
   # 1a. PHP Lint (static; no Moodle install, no dependency needed).
   lint-php:
@@ -132,20 +148,26 @@ jobs:
       - name: Snapshot committed AMD build
         run: |
           mkdir -p /tmp/amdref
-          cp moodle/mod/vimigallery/amd/build/viewer.min.js     /tmp/amdref/
-          cp moodle/mod/vimigallery/amd/build/viewer.min.js.map /tmp/amdref/
+          for m in viewer compare logic arrange; do
+            cp moodle/mod/vimigallery/amd/build/$m.min.js     /tmp/amdref/
+            cp moodle/mod/vimigallery/amd/build/$m.min.js.map /tmp/amdref/
+          done
 
-      - name: Grunt - AMD module (ESLint + build)
+      - name: Grunt - AMD modules (ESLint + build)
         working-directory: ${{ github.workspace }}/moodle/mod/vimigallery/amd
         run: |
-          npx grunt amd \
-            --files=mod/vimigallery/amd/src/viewer.js \
-            --max-lint-warnings=0
+          for m in viewer compare logic arrange; do
+            npx grunt amd \
+              --files=mod/vimigallery/amd/src/$m.js \
+              --max-lint-warnings=0
+          done
 
       - name: Verify committed AMD build matches the rebuild
         run: |
-          diff /tmp/amdref/viewer.min.js     moodle/mod/vimigallery/amd/build/viewer.min.js
-          diff /tmp/amdref/viewer.min.js.map moodle/mod/vimigallery/amd/build/viewer.min.js.map
+          for m in viewer compare logic arrange; do
+            diff /tmp/amdref/$m.min.js     moodle/mod/vimigallery/amd/build/$m.min.js
+            diff /tmp/amdref/$m.min.js.map moodle/mod/vimigallery/amd/build/$m.min.js.map
+          done
 
       - name: PHPDoc check
         run: moodle-plugin-ci phpdoc --max-warnings 0

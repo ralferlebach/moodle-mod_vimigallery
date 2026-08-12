@@ -24,6 +24,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+
+import {coupleScroll} from 'mod_vimigallery/logic';
+
 /**
  * Resolve a mod_vimipad editor string from the preloaded strings.
  *
@@ -33,30 +36,6 @@
 const getString = (key) => {
     const store = window.M && window.M.str && window.M.str.mod_vimipad;
     return store && store[key] !== undefined ? store[key] : undefined;
-};
-
-/**
- * Couple two elements' vertical scrolling so they mirror each other.
- *
- * @param {HTMLElement} a The first scroll container.
- * @param {HTMLElement} b The second scroll container.
- * @return {void}
- */
-const coupleScroll = (a, b) => {
-    let syncing = false;
-    const link = (from, to) => {
-        from.addEventListener('scroll', () => {
-            if (syncing) {
-                syncing = false;
-                return;
-            }
-            syncing = true;
-            to.scrollTop = from.scrollTop;
-            to.scrollLeft = from.scrollLeft;
-        });
-    };
-    link(a, b);
-    link(b, a);
 };
 
 /**

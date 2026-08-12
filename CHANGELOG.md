@@ -26,7 +26,18 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.12 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.13 - 2026-08-11
+
+### Added
+- Jest coverage for the dependency-free gallery JS logic: the compare views
+  scroll coupling (including its re-entrancy guard) and the comment DOM builder
+  (which renders author and body as text, preventing markup injection). The logic
+  now lives in amd/src/logic.js, imported by both compare.js and viewer.js, so the
+  tested code is the shipped code.
+- CI: a dedicated Jest job, and the AMD build-reproducibility gate now covers all
+  modules (viewer, compare, logic, arrange) rather than only viewer.
+
+## 0.2.12 - 2026-08-11
 
 ### Added
 - Backup/restore roundtrip test: proves a gallerys settings, items (with content
