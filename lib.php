@@ -287,12 +287,12 @@ function vimigallery_relink_comments($galleryid, array $oldcomments) {
     $newitems = $DB->get_records('vimigallery_item', ['galleryid' => $galleryid], '', 'id, contenthash');
     $hashtoid = [];
     foreach ($newitems as $item) {
-        if ($item->contenthash !== '' && !isset($hashtoid[$item->contenthash])) {
+        if (!empty($item->contenthash) && !isset($hashtoid[$item->contenthash])) {
             $hashtoid[$item->contenthash] = $item->id;
         }
     }
     foreach ($oldcomments as $comment) {
-        if ($comment->contenthash !== '' && isset($hashtoid[$comment->contenthash])) {
+        if (!empty($comment->contenthash) && isset($hashtoid[$comment->contenthash])) {
             $DB->set_field('vimigallery_comment', 'itemid', $hashtoid[$comment->contenthash], ['id' => $comment->id]);
         } else {
             $DB->delete_records('vimigallery_comment', ['id' => $comment->id]);

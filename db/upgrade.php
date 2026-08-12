@@ -80,11 +80,16 @@ function xmldb_vimigallery_upgrade($oldversion) {
             $dbman->add_field($table, $field);
         }
 
-        // Add a content hash to items.
+        // Add a content hash to items (nullable: char columns take no empty default).
         $table = new xmldb_table('vimigallery_item');
-        $field = new xmldb_field('contenthash', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, '', 'authorname');
+        $field = new xmldb_field('contenthash', XMLDB_TYPE_CHAR, '40', null, null, null, null, 'authorname');
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
+            $rs = $DB->get_recordset('vimigallery_item', null, '', 'id, mapjson');
+            foreach ($rs as $item) {
+                $DB->set_field('vimigallery_item', 'contenthash', sha1((string) $item->mapjson), ['id' => $item->id]);
+            }
+            $rs->close();
         }
 
         // Create the comment table.

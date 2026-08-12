@@ -38,7 +38,7 @@
         <FIELD NAME="profile" TYPE="char" LENGTH="40" NOTNULL="true" DEFAULT="conceptmap" SEQUENCE="false"/>
         <FIELD NAME="mapjson" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The serialised map value (frozen for uploads)"/>
         <FIELD NAME="authorname" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
-        <FIELD NAME="contenthash" TYPE="char" LENGTH="40" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="sha1 of the map content, stable across rebuilds"/>
+        <FIELD NAME="contenthash" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false" COMMENT="sha1 of the map content, stable across rebuilds"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

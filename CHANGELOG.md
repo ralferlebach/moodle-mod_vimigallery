@@ -26,7 +26,17 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.13 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.14 - 2026-08-12
+
+### Fixed
+- Install failed under moodle-plugin-ci because the new item content-hash column
+  was a CHAR NOT NULL with an empty-string default, which XMLDB rejects (the
+  emitted debugging message fails every install-dependent CI cell). The column is
+  now nullable with no default in both install.xml and the upgrade step; existing
+  rows are back-filled with their hash on upgrade, and comment re-linking treats an
+  empty/absent hash as no match.
+
+## 0.2.13 - 2026-08-11
 
 ### Added
 - Jest coverage for the dependency-free gallery JS logic: the compare views
