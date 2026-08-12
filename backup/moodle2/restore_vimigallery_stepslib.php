@@ -70,6 +70,9 @@ class restore_vimigallery_activity_structure_step extends restore_activity_struc
         $data = (object) $data;
         $oldid = $data->id;
         $data->galleryid = $this->get_new_parentid('vimigallery');
+        if (!empty($data->sourceuserid)) {
+            $data->sourceuserid = $this->get_mappingid('user', $data->sourceuserid) ?: null;
+        }
         $newid = $DB->insert_record('vimigallery_item', $data);
         $this->set_mapping('vimigallery_item', $oldid, $newid);
     }
@@ -97,5 +100,53 @@ class restore_vimigallery_activity_structure_step extends restore_activity_struc
     protected function after_execute() {
         $this->add_related_files('mod_vimigallery', 'intro', null);
         $this->add_related_files('mod_vimigallery', 'source', null);
+    }
+
+    /**
+     * Remap the gallery's source activity once every module in the backup has
+     * been restored.
+     *
+     * sourcecmid and sourcefieldid are ids of *another* activity, so they are
+     * meaningless in the target site: left untouched they would point at a
+     * missing module or, worse, at whatever unrelated module happens to carry
+     * the same numeric id. The mappings only exist after all modules are in
+     * place, which is why this runs in after_restore rather than while
+     * processing the record. A source that did not travel with the backup is
+     * cleared, turning the gallery into an empty upload gallery instead of a
+     * gallery silently pointing somewhere wrong.
+     *
+     * @return void
+     */
+    protected function after_restore() {
+        global $DB;
+
+        $gallery = $DB->get_record('vimigallery', ['id' => $this->task->get_activityid()]);
+        if (!$gallery || empty($gallery->sourcecmid) || $gallery->sourcetype === 'upload') {
+            return;
+        }
+
+        $newcmid = $this->get_mappingid('course_module', $gallery->sourcecmid);
+        if (!$newcmid) {
+            $DB->update_record('vimigallery', (object) [
+                'id' => $gallery->id,
+                'sourcetype' => 'upload',
+                'sourcecmid' => 0,
+                'sourcefieldid' => 0,
+            ]);
+            return;
+        }
+
+        $update = (object) ['id' => $gallery->id, 'sourcecmid' => $newcmid];
+        if ($gallery->sourcetype === 'datafield' && !empty($gallery->sourcefieldid)) {
+            $newfieldid = $this->get_mappingid('data_field', $gallery->sourcefieldid);
+            if (!$newfieldid) {
+                $update->sourcetype = 'upload';
+                $update->sourcecmid = 0;
+                $update->sourcefieldid = 0;
+            } else {
+                $update->sourcefieldid = $newfieldid;
+            }
+        }
+        $DB->update_record('vimigallery', $update);
     }
 }

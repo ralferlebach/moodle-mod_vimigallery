@@ -109,4 +109,84 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
         provider::delete_data_for_all_users_in_context($context);
         $this->assertEquals(0, $DB->count_records('vimigallery_comment', ['galleryid' => $cm->instance]));
     }
+
+    /**
+     * A materialised copy of a learner's map is discoverable, exportable and
+     * deleted on request. The copy is derived data, so a deletion request
+     * removes it rather than anonymising it; the source activity remains the
+     * authoritative record.
+     *
+     * @return void
+     */
+    public function test_materialised_item_provenance(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$context, $cm] = $this->make();
+        $learner = $this->getDataGenerator()->create_user();
+        $mapjson = '{"profile":"conceptmap","nodes":[],"relations":[]}';
+        $DB->insert_record('vimigallery_item', (object) [
+            'galleryid' => $cm->instance,
+            'sortorder' => 0,
+            'visible' => 1,
+            'sourcetype' => 'vimipad',
+            'profile' => 'conceptmap',
+            'mapjson' => $mapjson,
+            'authorname' => 'Learner One',
+            'contenthash' => sha1($mapjson),
+            'sourceuserid' => $learner->id,
+            'timecreated' => time(),
+        ]);
+
+        // Discovery finds the gallery for this learner even without comments.
+        $contexts = array_map('intval', provider::get_contexts_for_userid((int) $learner->id)->get_contextids());
+        $this->assertContains((int) $context->id, $contexts);
+
+        // The learner is listed among the users with data in the context.
+        $userlist = new \core_privacy\local\request\userlist($context, 'mod_vimigallery');
+        provider::get_users_in_context($userlist);
+        $this->assertContains((int) $learner->id, array_map('intval', $userlist->get_userids()));
+
+        // The copy is exported.
+        $this->export_context_data_for_user((int) $learner->id, $context, 'mod_vimigallery');
+        $this->assertTrue(writer::with_context($context)->has_any_data());
+
+        // And removed on a deletion request.
+        $contextlist = new approved_contextlist($learner, 'mod_vimigallery', [$context->id]);
+        provider::delete_data_for_user($contextlist);
+        $this->assertEquals(0, $DB->count_records('vimigallery_item', ['sourceuserid' => $learner->id]));
+    }
+
+    /**
+     * Teacher-uploaded items are not touched by a learner's deletion request.
+     *
+     * @return void
+     */
+    public function test_upload_items_are_not_personal_data(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$context, $cm] = $this->make();
+        $learner = $this->getDataGenerator()->create_user();
+        $mapjson = '{"profile":"conceptmap","nodes":[],"relations":[]}';
+        $DB->insert_record('vimigallery_item', (object) [
+            'galleryid' => $cm->instance,
+            'sortorder' => 0,
+            'visible' => 1,
+            'sourcetype' => 'upload',
+            'profile' => 'conceptmap',
+            'mapjson' => $mapjson,
+            'authorname' => '',
+            'contenthash' => sha1($mapjson),
+            'sourceuserid' => null,
+            'timecreated' => time(),
+        ]);
+
+        $before = $DB->count_records('vimigallery_item', ['galleryid' => $cm->instance]);
+        $contextlist = new approved_contextlist($learner, 'mod_vimigallery', [$context->id]);
+        provider::delete_data_for_user($contextlist);
+
+        // Nothing was removed: none of these items derive from a learner.
+        $this->assertEquals($before, $DB->count_records('vimigallery_item', ['galleryid' => $cm->instance]));
+    }
 }

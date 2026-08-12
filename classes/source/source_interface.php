@@ -31,6 +31,16 @@ namespace mod_vimigallery\source;
  */
 interface source_interface {
     /**
+     * Upper bound on the items a single source may materialise or display.
+     *
+     * A gallery renders every item into one page, and some sources have to do
+     * per-record work (loading a question usage, for instance) that cannot be
+     * batched away. Without a ceiling a cohort-sized quiz or database would turn
+     * one page request into thousands of queries. Sources take the most recent
+     * items up to this bound.
+     */
+    const MAX_ITEMS = 200;
+    /**
      * The maps this source contributes, as the viewer is allowed to see them.
      *
      * Each returned item is an stdClass with at least: `mapjson` (string),

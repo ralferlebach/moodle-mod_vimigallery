@@ -82,15 +82,61 @@ class comment_service {
         if (empty($comments)) {
             return [];
         }
-        $userids = array_values(array_unique(array_map(fn($c) => (int) $c->userid, $comments)));
+        $names = self::author_names(array_map(fn($c) => (int) $c->userid, $comments));
+        foreach ($comments as $comment) {
+            $comment->authorname = $names[(int) $comment->userid] ?? '';
+        }
+        return array_values($comments);
+    }
+
+    /**
+     * All comments of a gallery, grouped by item id.
+     *
+     * Loading them per item would cost two queries per slide (comments plus the
+     * authors), so a gallery page would scale with the number of maps. This does
+     * it in two queries for the whole page.
+     *
+     * @param int $galleryid The gallery instance id.
+     * @return array Map of itemid => list of comments (each with authorname).
+     */
+    public static function get_for_gallery(int $galleryid): array {
+        global $DB;
+
+        $comments = $DB->get_records('vimigallery_comment', ['galleryid' => $galleryid], 'timecreated ASC, id ASC');
+        if (empty($comments)) {
+            return [];
+        }
+        $names = self::author_names(array_map(fn($c) => (int) $c->userid, $comments));
+
+        $grouped = [];
+        foreach ($comments as $comment) {
+            $comment->authorname = $names[(int) $comment->userid] ?? '';
+            $grouped[(int) $comment->itemid][] = $comment;
+        }
+        return $grouped;
+    }
+
+    /**
+     * Display names for a set of user ids, in one query.
+     *
+     * @param array $userids The user ids (may repeat).
+     * @return array Map of userid => full name.
+     */
+    public static function author_names(array $userids): array {
+        global $DB;
+
+        $userids = array_values(array_unique(array_filter(array_map('intval', $userids))));
+        if (empty($userids)) {
+            return [];
+        }
         [$insql, $params] = $DB->get_in_or_equal($userids);
         $users = $DB->get_records_select('user', "id $insql", $params);
 
-        foreach ($comments as $comment) {
-            $comment->authorname = isset($users[$comment->userid])
-                ? fullname($users[$comment->userid]) : '';
+        $names = [];
+        foreach ($users as $user) {
+            $names[(int) $user->id] = fullname($user);
         }
-        return array_values($comments);
+        return $names;
     }
 
     /**

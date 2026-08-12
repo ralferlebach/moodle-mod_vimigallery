@@ -41,6 +41,16 @@ class provider implements
      * @return collection The updated collection.
      */
     public static function get_metadata(collection $collection): collection {
+        // Materialised items can hold learner-derived content: when a gallery
+        // pulls maps from a quiz, database or ViMi Pad activity it stores a copy
+        // of the map and the author's display name. Ownership of the originals
+        // stays with the source activity, but these copies must be declared.
+        $collection->add_database_table('vimigallery_item', [
+            'mapjson' => 'privacy:metadata:vimigallery_item:mapjson',
+            'authorname' => 'privacy:metadata:vimigallery_item:authorname',
+            'sourceuserid' => 'privacy:metadata:vimigallery_item:sourceuserid',
+        ], 'privacy:metadata:vimigallery_item');
+
         $collection->add_database_table('vimigallery_comment', [
             'userid' => 'privacy:metadata:vimigallery_comment:userid',
             'content' => 'privacy:metadata:vimigallery_comment:content',
@@ -69,6 +79,20 @@ class provider implements
             'modlevel' => CONTEXT_MODULE,
             'userid' => $userid,
         ]);
+
+        // Galleries holding a materialised copy of this user's work.
+        $itemsql = "SELECT ctx.id
+                      FROM {vimigallery_item} i
+                      JOIN {vimigallery} g ON g.id = i.galleryid
+                      JOIN {course_modules} cm ON cm.instance = g.id
+                      JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                      JOIN {context} ctx ON ctx.instanceid = cm.id AND ctx.contextlevel = :modlevel
+                     WHERE i.sourceuserid = :userid";
+        $contextlist->add_from_sql($itemsql, [
+            'modname' => 'vimigallery',
+            'modlevel' => CONTEXT_MODULE,
+            'userid' => $userid,
+        ]);
         return $contextlist;
     }
 
@@ -90,6 +114,17 @@ class provider implements
                   JOIN {modules} m ON m.id = cm.module AND m.name = :modname
                  WHERE cm.id = :cmid";
         $userlist->add_from_sql('userid', $sql, [
+            'modname' => 'vimigallery',
+            'cmid' => $context->instanceid,
+        ]);
+
+        $itemsql = "SELECT i.sourceuserid AS userid
+                      FROM {vimigallery_item} i
+                      JOIN {vimigallery} g ON g.id = i.galleryid
+                      JOIN {course_modules} cm ON cm.instance = g.id
+                      JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                     WHERE cm.id = :cmid AND i.sourceuserid IS NOT NULL";
+        $userlist->add_from_sql('userid', $itemsql, [
             'modname' => 'vimigallery',
             'cmid' => $context->instanceid,
         ]);
@@ -132,6 +167,48 @@ class provider implements
                 (object) ['comments' => $data]
             );
         }
+
+        self::export_items($contextlist);
+    }
+
+    /**
+     * Export the materialised copies of a user's maps.
+     *
+     * @param approved_contextlist $contextlist The approved contexts.
+     * @return void
+     */
+    protected static function export_items(approved_contextlist $contextlist): void {
+        global $DB;
+
+        $userid = $contextlist->get_user()->id;
+        foreach ($contextlist->get_contexts() as $context) {
+            if (!$context instanceof \context_module) {
+                continue;
+            }
+            $cm = get_coursemodule_from_id('vimigallery', $context->instanceid);
+            if (!$cm) {
+                continue;
+            }
+            $items = $DB->get_records('vimigallery_item', [
+                'galleryid' => $cm->instance,
+                'sourceuserid' => $userid,
+            ], 'sortorder ASC');
+            if (empty($items)) {
+                continue;
+            }
+            $data = [];
+            foreach ($items as $item) {
+                $data[] = (object) [
+                    'profile' => $item->profile,
+                    'authorname' => $item->authorname,
+                    'mapjson' => $item->mapjson,
+                ];
+            }
+            writer::with_context($context)->export_data(
+                [get_string('pluginname', 'mod_vimigallery')],
+                (object) ['maps' => $data]
+            );
+        }
     }
 
     /**
@@ -148,6 +225,14 @@ class provider implements
         $cm = get_coursemodule_from_id('vimigallery', $context->instanceid);
         if ($cm) {
             $DB->delete_records('vimigallery_comment', ['galleryid' => $cm->instance]);
+            // Materialised copies of learners' work are derived data: the source
+            // activity remains the authoritative record, so the copy is removed
+            // rather than anonymised.
+            $DB->delete_records_select(
+                'vimigallery_item',
+                'galleryid = :galleryid AND sourceuserid IS NOT NULL',
+                ['galleryid' => $cm->instance]
+            );
         }
     }
 
@@ -169,6 +254,10 @@ class provider implements
                 $DB->delete_records('vimigallery_comment', [
                     'galleryid' => $cm->instance,
                     'userid' => $userid,
+                ]);
+                $DB->delete_records('vimigallery_item', [
+                    'galleryid' => $cm->instance,
+                    'sourceuserid' => $userid,
                 ]);
             }
         }
@@ -197,5 +286,6 @@ class provider implements
         [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
         $params['galleryid'] = $cm->instance;
         $DB->delete_records_select('vimigallery_comment', "galleryid = :galleryid AND userid $insql", $params);
+        $DB->delete_records_select('vimigallery_item', "galleryid = :galleryid AND sourceuserid $insql", $params);
     }
 }

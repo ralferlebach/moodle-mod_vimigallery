@@ -119,13 +119,33 @@ class vimipad_source implements source_interface {
                   FROM {vimipad_workspace} w
                   JOIN {vimipad_snapshot} s ON s.id = w.submittedsnapshotid
                  WHERE " . implode(' AND ', $where) . "
-              ORDER BY s.timecreated ASC, s.id ASC";
-        $rows = $DB->get_records_sql($sql, $params);
+              ORDER BY s.timecreated DESC, s.id DESC";
+        // Bounded and newest-first, then restored to chronological order.
+        $rows = array_reverse($DB->get_records_sql($sql, $params, 0, self::MAX_ITEMS), true);
+
+        // Resolve all owner names up front: one query for users, and the group
+        // cache is filled once instead of per submitted workspace.
+        $names = \mod_vimigallery\local\comment_service::author_names(
+            array_map(fn($r) => (int) $r->userid, $rows)
+        );
+        $groupnames = [];
 
         $entries = [];
         foreach ($rows as $row) {
-            $author = $this->author_name((int) $row->userid, (int) $row->groupid);
-            $entries[] = (object) ['mapjson' => $row->mapjson, 'authorname' => $author];
+            $groupid = (int) $row->groupid;
+            if ($groupid > 0) {
+                if (!array_key_exists($groupid, $groupnames)) {
+                    $groupnames[$groupid] = (string) groups_get_group_name($groupid);
+                }
+                $author = $groupnames[$groupid];
+            } else {
+                $author = $names[(int) $row->userid] ?? '';
+            }
+            $entries[] = (object) [
+                'mapjson' => $row->mapjson,
+                'authorname' => $author,
+                'sourceuserid' => $groupid > 0 ? null : (int) $row->userid,
+            ];
         }
         return $this->as_items($entries);
     }
@@ -176,6 +196,7 @@ class vimipad_source implements source_interface {
             $item->authorname = \core_text::substr($entry->authorname, 0, 255);
             $item->sortorder = $sortorder++;
             $item->visible = 1;
+            $item->sourceuserid = isset($entry->sourceuserid) ? (int) $entry->sourceuserid : null;
             $items[] = $item;
         }
         return $items;

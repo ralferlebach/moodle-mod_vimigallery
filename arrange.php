@@ -28,7 +28,12 @@ require_once(__DIR__ . '/lib.php');
 use mod_vimigallery\local\curation;
 
 $id = required_param('id', PARAM_INT);
-$action = optional_param('action', '', PARAM_ALPHA);
+// Mutations are accepted from POST only: a state-changing action must not be
+// reachable by a plain link, prefetch or embedded image URL. The sesskey check
+// below still guards against forged posts.
+$action = (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST')
+    ? optional_param('action', '', PARAM_ALPHA)
+    : '';
 $itemid = optional_param('item', 0, PARAM_INT);
 
 $cm = get_coursemodule_from_id('vimigallery', $id, 0, false, MUST_EXIST);
@@ -41,7 +46,8 @@ require_capability('mod/vimigallery:manageitems', $context);
 
 $pageurl = new moodle_url('/mod/vimigallery/arrange.php', ['id' => $cm->id]);
 
-if ($action && confirm_sesskey()) {
+if ($action !== '') {
+    require_sesskey();
     switch ($action) {
         case 'up':
             curation::move($gallery->id, $itemid, curation::UP);
@@ -67,6 +73,34 @@ $PAGE->set_title(format_string($gallery->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+/**
+ * A one-button POST form for a curation action, so no mutation sits behind a link.
+ *
+ * @param moodle_url $target The arrange page url.
+ * @param string $action The curation action.
+ * @param int $itemid The item the action applies to (0 for gallery-wide actions).
+ * @param string $label The button content (icon markup or text).
+ * @param string $class Extra classes for the button.
+ * @return string The form HTML.
+ */
+function vimigallery_action_button(moodle_url $target, string $action, int $itemid, string $label, string $class = '') {
+    $hidden = html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $target->param('id')])
+        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => $action])
+        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    if ($itemid > 0) {
+        $hidden .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'item', 'value' => $itemid]);
+    }
+    $button = html_writer::tag('button', $label, [
+        'type' => 'submit',
+        'class' => trim('btn btn-link p-0 border-0 align-baseline ' . $class),
+    ]);
+    return html_writer::tag('form', $hidden . $button, [
+        'method' => 'post',
+        'action' => $target->out_omit_querystring(),
+        'class' => 'd-inline',
+    ]);
+}
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('arrange', 'mod_vimigallery'));
 
@@ -81,10 +115,12 @@ echo html_writer::div(
 // A materialised source can be refreshed from its origin.
 if ($gallery->sourcetype !== 'upload' && $gallery->freshness !== 'live') {
     echo html_writer::div(
-        html_writer::link(
-            new moodle_url($pageurl, ['action' => 'refresh', 'sesskey' => sesskey()]),
+        vimigallery_action_button(
+            $pageurl,
+            'refresh',
+            0,
             get_string('refreshsnapshot', 'mod_vimigallery'),
-            ['class' => 'btn btn-secondary']
+            'btn-secondary text-white'
         ),
         'mb-3'
     );
@@ -112,28 +148,16 @@ foreach ($items as $pos => $item) {
     );
 
     $up = ($pos > 0)
-        ? html_writer::link(
-            new moodle_url($pageurl, ['action' => 'up', 'item' => $item->id, 'sesskey' => sesskey()]),
-            $OUTPUT->pix_icon('t/up', get_string('moveup'))
-        )
+        ? vimigallery_action_button($pageurl, 'up', (int) $item->id, $OUTPUT->pix_icon('t/up', get_string('moveup')))
         : '';
     $down = ($pos < $last)
-        ? html_writer::link(
-            new moodle_url($pageurl, ['action' => 'down', 'item' => $item->id, 'sesskey' => sesskey()]),
-            $OUTPUT->pix_icon('t/down', get_string('movedown'))
-        )
+        ? vimigallery_action_button($pageurl, 'down', (int) $item->id, $OUTPUT->pix_icon('t/down', get_string('movedown')))
         : '';
 
     if ($item->visible) {
-        $vis = html_writer::link(
-            new moodle_url($pageurl, ['action' => 'hide', 'item' => $item->id, 'sesskey' => sesskey()]),
-            $OUTPUT->pix_icon('t/hide', get_string('hide'))
-        );
+        $vis = vimigallery_action_button($pageurl, 'hide', (int) $item->id, $OUTPUT->pix_icon('t/hide', get_string('hide')));
     } else {
-        $vis = html_writer::link(
-            new moodle_url($pageurl, ['action' => 'show', 'item' => $item->id, 'sesskey' => sesskey()]),
-            $OUTPUT->pix_icon('t/show', get_string('show'))
-        );
+        $vis = vimigallery_action_button($pageurl, 'show', (int) $item->id, $OUTPUT->pix_icon('t/show', get_string('show')));
     }
 
     $label = html_writer::tag(

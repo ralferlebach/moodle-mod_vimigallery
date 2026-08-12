@@ -134,4 +134,45 @@ final class comment_test extends \advanced_testcase {
         $completion = new custom_completion($cminfo, (int) $user->id);
         $this->assertSame(COMPLETION_COMPLETE, $completion->get_state('completioncommentsmin'));
     }
+
+    /**
+     * Comments for a whole gallery load in a fixed number of queries rather than
+     * two per map, which is what makes a large album viable.
+     *
+     * @return void
+     */
+    public function test_gallery_comments_load_in_constant_queries(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$course, $cm, $itemid] = $this->make();
+
+        $mapjson = '{"profile":"conceptmap","nodes":[],"relations":[]}';
+        $seconditem = (int) $DB->insert_record('vimigallery_item', (object) [
+            'galleryid' => $cm->instance,
+            'sortorder' => 1,
+            'visible' => 1,
+            'sourcetype' => 'upload',
+            'profile' => 'conceptmap',
+            'mapjson' => $mapjson,
+            'authorname' => '',
+            'contenthash' => sha1($mapjson . '2'),
+            'sourceuserid' => null,
+            'timecreated' => time(),
+        ]);
+        $one = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $two = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        comment_service::post($cm, $itemid, (int) $one->id, 'first');
+        comment_service::post($cm, $seconditem, (int) $two->id, 'second');
+
+        $before = $DB->perf_get_reads();
+        $grouped = comment_service::get_for_gallery((int) $cm->instance);
+        $reads = $DB->perf_get_reads() - $before;
+
+        $this->assertCount(1, $grouped[$itemid]);
+        $this->assertCount(1, $grouped[$seconditem]);
+        $this->assertSame('first', $grouped[$itemid][0]->content);
+        // Two queries: the comments, then their authors. Per-item loading would
+        // grow with the number of maps.
+        $this->assertLessThanOrEqual(2, $reads);
+    }
 }

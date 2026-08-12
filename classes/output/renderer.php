@@ -48,6 +48,11 @@ class renderer extends plugin_renderer_base {
 
         $this->preload_editor_strings();
 
+        // All comments for the page in two queries, rather than two per slide.
+        $allcomments = $gallery->allow_comments()
+            ? \mod_vimigallery\local\comment_service::get_for_gallery((int) $gallery->instance->id)
+            : [];
+
         $rootid = 'vimigallery_' . $gallery->instance->id;
         $multiple = count($items) > 1;
 
@@ -92,7 +97,11 @@ class renderer extends plugin_renderer_base {
             // Comments belong to materialised items (numeric ids); live sources
             // have synthetic ids and are not commentable.
             if ($gallery->allow_comments() && is_numeric($item->id)) {
-                $slidebody .= $this->render_comments($gallery, (int) $item->id);
+                $slidebody .= $this->render_comments(
+                    $gallery,
+                    (int) $item->id,
+                    $allcomments[(int) $item->id] ?? []
+                );
             }
 
             // Only the first slide is visible initially; the rest are hidden and
@@ -157,10 +166,10 @@ class renderer extends plugin_renderer_base {
      *
      * @param gallery $gallery The gallery renderable.
      * @param int $itemid The materialised item id.
+     * @param array $comments The already-loaded comments for this item.
      * @return string The comments HTML.
      */
-    protected function render_comments(gallery $gallery, int $itemid): string {
-        $comments = \mod_vimigallery\local\comment_service::get_for_item($itemid);
+    protected function render_comments(gallery $gallery, int $itemid, array $comments): string {
 
         $list = '';
         foreach ($comments as $comment) {

@@ -26,7 +26,67 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.14 - 2026-08-12
+- Backup/restore and a null privacy provider (no personal data yet).
+
+## 0.3.0 - 2026-08-12
+
+First beta. Maturity raised from ALPHA to BETA.
+
+### Added
+- Provenance on materialised items (sourceuserid), so the privacy API can find,
+  export and remove copies of a learners work that live in a gallery. A deletion
+  request removes the copy rather than anonymising it: the copy is derived data
+  and the source activity remains the authoritative record. Teacher uploads are
+  untouched. The column travels through backup and restore with user mapping.
+
+### Changed
+- Comments for a gallery page load in two queries instead of two per map.
+- All three activity sources batch author and group names into one query and are
+  bounded by source_interface::MAX_ITEMS (newest first, then chronological). This
+  matters most for the quiz source, where each attempt needs its own question
+  usage load that cannot be batched.
+- Optional peer plugins degrade gracefully: if qtype_vimipad or datafield_vimipad
+  is not installed, the corresponding source yields an empty gallery instead of
+  failing on a missing table.
+
+### Tests
+- Privacy coverage for materialised learner maps (discovery, userlist, export,
+  deletion, and that teacher uploads are not affected) and a query-budget test
+  for the comment loader.
+
+## 0.2.15 - 2026-08-12
+
+### Security
+- compare.php now requires mod/vimigallery:view. Previously only login was
+  checked, so a user whose view access had been removed could still reach the
+  comparison via the direct URL.
+- Curation actions (move, hide, show, refresh) are POST-only. They were reachable
+  as plain links, which makes a state change something a prefetch or an embedded
+  URL could trigger; the sesskey check alone did not prevent that.
+
+### Fixed
+- Deleting a gallery now removes its comments as well, instead of leaving
+  orphaned rows (or failing where the foreign keys are enforced).
+- Rebuilding the item set runs in a transaction: a failure while reading or
+  writing the source no longer leaves the gallery emptied.
+- The chosen source activity is validated server-side (exists, right module type,
+  same course, and for a database source the field belongs to that activity and is
+  a ViMi Pad field). The form only offered same-course activities, but the posted
+  ids were taken on trust.
+- Source ids are remapped on restore. sourcecmid/sourcefieldid used to be written
+  back verbatim, so a restored gallery could point at a missing module or at an
+  unrelated one with the same numeric id. A source that did not travel with the
+  backup now resets the gallery to an empty upload gallery.
+- Items materialised from another activity are no longer included in a backup
+  taken without user information: they are copies of learners work and carry
+  their names.
+- Uploaded maps are validated against the public ViMi Pad map policy and bounded
+  in size; the privacy notice no longer claims the plugin stores no personal data,
+  and materialised items are declared in the privacy metadata.
+- Removed three duplicated blocks left by an incomplete merge (the vimipadsource
+  form element, its preprocessing, and the vimipad branch in the source fields).
+
+## 0.2.14 - 2026-08-12
 
 ### Fixed
 - Install failed under moodle-plugin-ci because the new item content-hash column

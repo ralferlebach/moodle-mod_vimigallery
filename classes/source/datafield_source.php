@@ -57,6 +57,12 @@ class datafield_source implements source_interface {
 
         $userid = $userid ?? (int) $USER->id;
 
+        // The datafield_vimipad plugin is an optional peer: without it there are no ViMi Pad
+        // fields to read, so degrade to empty instead of failing.
+        if (!\core_component::get_plugin_directory('datafield', 'vimipad')) {
+            return [];
+        }
+
         // Resolve the source database module; bail out quietly if it is gone.
         $cm = get_coursemodule_from_id('data', $this->cmid, 0, false, IGNORE_MISSING);
         if (!$cm) {
@@ -113,12 +119,17 @@ class datafield_source implements source_interface {
                   FROM {data_records} r
                   JOIN {data_content} c ON c.recordid = r.id AND c.fieldid = :fieldid
                  WHERE " . implode(' AND ', $where) . "
-              ORDER BY r.timecreated ASC, r.id ASC";
-        $records = $DB->get_records_sql($sql, $params);
+              ORDER BY r.timecreated DESC, r.id DESC";
+        // Bounded and newest-first, then restored to chronological order: a
+        // database with thousands of entries must not become one gallery page.
+        $records = array_reverse($DB->get_records_sql($sql, $params, 0, self::MAX_ITEMS), true);
 
         $items = [];
         $sortorder = 0;
-        $usercache = [];
+        // Author names in one query rather than one per record.
+        $usercache = \mod_vimigallery\local\comment_service::author_names(
+            array_map(fn($r) => (int) $r->userid, $records)
+        );
         foreach ($records as $record) {
             if ($record->mapjson === null || trim($record->mapjson) === '') {
                 continue;
@@ -130,18 +141,14 @@ class datafield_source implements source_interface {
             $profile = isset($decoded['profile']) && is_string($decoded['profile'])
                 ? $decoded['profile'] : 'conceptmap';
 
-            $author = '';
-            if (!isset($usercache[$record->userid])) {
-                $user = \core_user::get_user($record->userid, '*', IGNORE_MISSING);
-                $usercache[$record->userid] = $user ? fullname($user) : '';
-            }
-            $author = $usercache[$record->userid];
+            $author = $usercache[(int) $record->userid] ?? '';
 
             $item = new \stdClass();
             $item->id = 'df' . $record->id;
             $item->mapjson = $record->mapjson;
             $item->profile = \core_text::substr($profile, 0, 40);
             $item->authorname = \core_text::substr($author, 0, 255);
+            $item->sourceuserid = (int) $record->userid;
             $item->sortorder = $sortorder++;
             $item->visible = 1;
             $items[] = $item;

@@ -103,8 +103,61 @@ function vimigallery_prepare_source_fields($data) {
         $data->sourcecmid = (int) $data->qtypesource;
     } else if ($data->sourcetype === 'vimipad' && !empty($data->vimipadsource)) {
         $data->sourcecmid = (int) $data->vimipadsource;
-    } else if ($data->sourcetype === 'vimipad' && !empty($data->vimipadsource)) {
-        $data->sourcecmid = (int) $data->vimipadsource;
+    }
+
+    vimigallery_validate_source_selection($data);
+}
+
+/**
+ * Verify that a chosen source really is a source this gallery may use.
+ *
+ * The form only offers activities from the gallery's own course, but the posted
+ * ids are just numbers and can be swapped for any other course module. Without
+ * this check a teacher with access to two courses could materialise content from
+ * course B into a gallery in course A, contrary to the same-course contract the
+ * UI states. Anything that does not check out falls back to an upload gallery
+ * rather than silently pointing somewhere unintended.
+ *
+ * @param object $data The submitted module data (already carrying sourcecmid).
+ * @return void
+ */
+function vimigallery_validate_source_selection($data) {
+    global $DB;
+
+    if ($data->sourcetype === 'upload' || empty($data->sourcecmid)) {
+        return;
+    }
+
+    $expected = [
+        'datafield' => 'data',
+        'qtype' => 'quiz',
+        'vimipad' => 'vimipad',
+    ];
+    $reset = function () use ($data) {
+        $data->sourcetype = 'upload';
+        $data->sourcecmid = 0;
+        $data->sourcefieldid = 0;
+    };
+
+    if (!isset($expected[$data->sourcetype])) {
+        $reset();
+        return;
+    }
+
+    $cm = get_coursemodule_from_id($expected[$data->sourcetype], (int) $data->sourcecmid, 0, false, IGNORE_MISSING);
+    if (!$cm || (int) $cm->course !== (int) $data->course) {
+        $reset();
+        return;
+    }
+
+    if ($data->sourcetype !== 'datafield') {
+        return;
+    }
+
+    // The field must belong to this database activity and be a ViMi Pad field.
+    $field = $DB->get_record('data_fields', ['id' => (int) $data->sourcefieldid], 'id, dataid, type');
+    if (!$field || (int) $field->dataid !== (int) $cm->instance || $field->type !== 'vimipad') {
+        $reset();
     }
 }
 
@@ -163,6 +216,9 @@ function vimigallery_delete_instance($id) {
     if (!$DB->record_exists('vimigallery', ['id' => $id])) {
         return true;
     }
+    // Children first, so a database that enforces the foreign keys does not
+    // refuse the delete and no orphaned comments can survive the gallery.
+    $DB->delete_records('vimigallery_comment', ['galleryid' => $id]);
     $DB->delete_records('vimigallery_item', ['galleryid' => $id]);
     $DB->delete_records('vimigallery', ['id' => $id]);
 
@@ -215,8 +271,6 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
         ['galleryid' => $galleryid]
     );
 
-    $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
-
     $entries = [];
     $source = vimigallery_make_source($gallery);
     if ($source !== null) {
@@ -228,6 +282,7 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
                     'profile' => $sourceitem->profile,
                     'mapjson' => $sourceitem->mapjson,
                     'authorname' => $sourceitem->authorname,
+                    'sourceuserid' => $sourceitem->sourceuserid ?? null,
                 ];
             }
         }
@@ -236,11 +291,17 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
         $fs = get_file_storage();
         $files = $fs->get_area_files($context->id, 'mod_vimigallery', 'source', 0, 'filename', false);
         foreach ($files as $file) {
-            $content = $file->get_content();
-            $decoded = json_decode($content, true);
-            if (!is_array($decoded) || !isset($decoded['nodes'])) {
+            if ($file->get_filesize() > \mod_vimipad\api\value::MAX_BYTES) {
                 continue;
             }
+            $content = $file->get_content();
+            // Uploaded files are teacher-supplied but still arbitrary input, so
+            // they must satisfy the public ViMi Pad map policy before they are
+            // materialised and later handed to the editor or the scorer.
+            if (!\mod_vimipad\api\value::is_valid($content)) {
+                continue;
+            }
+            $decoded = json_decode($content, true);
             $profile = isset($decoded['profile']) && is_string($decoded['profile'])
                 ? $decoded['profile'] : 'conceptmap';
             $author = isset($decoded['author']) && is_string($decoded['author'])
@@ -250,10 +311,16 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
                 'profile' => core_text::substr($profile, 0, 40),
                 'mapjson' => $content,
                 'authorname' => core_text::substr($author, 0, 255),
+                'sourceuserid' => null,
             ];
         }
     }
 
+    // Everything above only reads. The destructive swap happens in one
+    // transaction, so a failure while replacing the items rolls back to the
+    // previous, working gallery instead of leaving it emptied.
+    $transaction = $DB->start_delegated_transaction();
+    $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
     $sortorder = 0;
     foreach ($entries as $entry) {
         $DB->insert_record('vimigallery_item', (object) [
@@ -265,11 +332,12 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
             'mapjson' => $entry['mapjson'],
             'authorname' => $entry['authorname'],
             'contenthash' => sha1($entry['mapjson']),
+            'sourceuserid' => $entry['sourceuserid'] ?? null,
             'timecreated' => time(),
         ]);
     }
-
     vimigallery_relink_comments($galleryid, $oldcomments);
+    $transaction->allow_commit();
 }
 
 /**

@@ -132,5 +132,16 @@ function xmldb_vimigallery_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026081112, 'vimigallery');
     }
 
+    if ($oldversion < 2026081117) {
+        // Provenance of a materialised item, so the privacy API can find and
+        // remove copies of a learner's work that live in a gallery.
+        $table = new xmldb_table('vimigallery_item');
+        $field = new xmldb_field('sourceuserid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'contenthash');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026081117, 'vimigallery');
+    }
+
     return true;
 }

@@ -39,6 +39,7 @@
         <FIELD NAME="mapjson" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The serialised map value (frozen for uploads)"/>
         <FIELD NAME="authorname" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="contenthash" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false" COMMENT="sha1 of the map content, stable across rebuilds"/>
+        <FIELD NAME="sourceuserid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The learner whose work this materialised copy derives from, if any"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

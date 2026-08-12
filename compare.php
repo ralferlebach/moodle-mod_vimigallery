@@ -33,6 +33,7 @@ $course = get_course($cm->course);
 require_login($course, true, $cm);
 
 $context = context_module::instance($cm->id);
+require_capability('mod/vimigallery:view', $context);
 $modinfo = get_fast_modinfo($course);
 $cminfo = $modinfo->get_cm($cm->id);
 

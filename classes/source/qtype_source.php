@@ -25,8 +25,8 @@ namespace mod_vimigallery\source;
  * everyone by choosing a static or snapshot freshness, which materialises the
  * maps at save time.
  *
- * Submissions mode (learners' attempt responses) is handled separately and is
- * not provided by this class yet.
+ * Submissions mode exposes learners' attempt responses instead of the reference
+ * map, subject to the viewer's own quiz permissions and group membership.
  *
  * @package    mod_vimigallery
  * @copyright  2026 Ralf Erlebach
@@ -66,6 +66,13 @@ class qtype_source implements source_interface {
         global $DB, $USER;
 
         $userid = $userid ?? (int) $USER->id;
+
+        // The qtype_vimipad plugin is an optional peer: this source reads its options table
+        // directly, so if the plugin was never installed (or has been removed)
+        // the gallery must degrade to empty rather than fail on a missing table.
+        if (!\core_component::get_plugin_directory('qtype', 'vimipad')) {
+            return [];
+        }
 
         $cm = get_coursemodule_from_id('quiz', $this->cmid, 0, false, IGNORE_MISSING);
         if (!$cm) {
@@ -124,6 +131,7 @@ class qtype_source implements source_interface {
             $item->authorname = '';
             $item->sortorder = $sortorder++;
             $item->visible = 1;
+            $item->sourceuserid = isset($entry->sourceuserid) ? (int) $entry->sourceuserid : null;
             $items[] = $item;
         }
 
@@ -172,16 +180,26 @@ class qtype_source implements source_interface {
             $params += $inparams;
         }
 
+        // Newest first, bounded: each attempt costs a question-usage load, which
+        // cannot be batched, so an unbounded cohort would make this page
+        // unusable. The slice is reversed afterwards to restore chronology.
         $attempts = $DB->get_records_select(
             'quiz_attempts',
             implode(' AND ', $where),
             $params,
-            'timefinish ASC, id ASC',
-            'id, userid, uniqueid'
+            'timefinish DESC, id DESC',
+            'id, userid, uniqueid',
+            0,
+            self::MAX_ITEMS
+        );
+        $attempts = array_reverse($attempts, true);
+
+        // Author names in one query rather than one per attempt.
+        $usercache = \mod_vimigallery\local\comment_service::author_names(
+            array_map(fn($a) => (int) $a->userid, $attempts)
         );
 
         $entries = [];
-        $usercache = [];
         foreach ($attempts as $attempt) {
             try {
                 $quba = \question_engine::load_questions_usage_by_activity($attempt->uniqueid);
@@ -197,11 +215,11 @@ class qtype_source implements source_interface {
                 if ($mapjson === null || trim((string) $mapjson) === '') {
                     continue;
                 }
-                if (!isset($usercache[$attempt->userid])) {
-                    $user = \core_user::get_user($attempt->userid, '*', IGNORE_MISSING);
-                    $usercache[$attempt->userid] = $user ? fullname($user) : '';
-                }
-                $entries[] = (object) ['mapjson' => $mapjson, 'authorname' => $usercache[$attempt->userid]];
+                $entries[] = (object) [
+                    'mapjson' => $mapjson,
+                    'authorname' => $usercache[(int) $attempt->userid] ?? '',
+                    'sourceuserid' => (int) $attempt->userid,
+                ];
             }
         }
 

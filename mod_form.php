@@ -67,7 +67,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
             'vimijson',
             get_string('sourcefiles', 'mod_vimigallery'),
             null,
-            ['subdirs' => 0, 'maxfiles' => 200, 'accepted_types' => ['.json']]
+            ['subdirs' => 0, 'maxfiles' => 200, 'maxbytes' => \mod_vimipad\api\value::MAX_BYTES, 'accepted_types' => ['.json']]
         );
         $mform->addHelpButton('vimijson', 'sourcefiles', 'mod_vimigallery');
         $mform->hideIf('vimijson', 'sourcetype', 'neq', 'upload');
@@ -96,15 +96,6 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->hideIf('qtypesource', 'sourcetype', 'neq', 'qtype');
 
         // ViMi Pad source: a ViMi Pad activity in this course.
-        $vimipadsources = vimigallery_list_vimipad_sources($COURSE->id);
-        if (empty($vimipadsources)) {
-            $vimipadsources = ['' => get_string('novimipads', 'mod_vimigallery')];
-        }
-        $mform->addElement('select', 'vimipadsource', get_string('vimipadsource', 'mod_vimigallery'), $vimipadsources);
-        $mform->addHelpButton('vimipadsource', 'vimipadsource', 'mod_vimigallery');
-        $mform->hideIf('vimipadsource', 'sourcetype', 'neq', 'vimipad');
-
-        // ViMi Pad activity source.
         $vimipadsources = vimigallery_list_vimipad_sources($COURSE->id);
         if (empty($vimipadsources)) {
             $vimipadsources = ['' => get_string('novimipads', 'mod_vimigallery')];
@@ -178,7 +169,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
                 'mod_vimigallery',
                 'source',
                 0,
-                ['subdirs' => 0, 'maxfiles' => 200, 'accepted_types' => ['.json']]
+                ['subdirs' => 0, 'maxfiles' => 200, 'maxbytes' => \mod_vimipad\api\value::MAX_BYTES, 'accepted_types' => ['.json']]
             );
             $defaultvalues['vimijson'] = $draftitemid;
         }
@@ -194,12 +185,8 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         }
         $defaultvalues['completioncommentsenabled'] =
             !empty($defaultvalues['completioncommentsmin']) ? 1 : 0;
-        if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'vimipad') {
-            $defaultvalues['vimipadsource'] = $this->current->sourcecmid;
-        }
-        $defaultvalues['completioncommentsenabled'] =
-            !empty($defaultvalues['completioncommentsmin']) ? 1 : 0;
     }
+
     /**
      * Add the comment-count completion rule.
      *

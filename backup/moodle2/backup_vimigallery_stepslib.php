@@ -42,7 +42,7 @@ class backup_vimigallery_activity_structure_step extends backup_activity_structu
         $items = new backup_nested_element('items');
         $item = new backup_nested_element('item', ['id'], [
             'sortorder', 'visible', 'sourcetype', 'profile', 'mapjson',
-            'authorname', 'contenthash', 'timecreated',
+            'authorname', 'contenthash', 'sourceuserid', 'timecreated',
         ]);
         $comments = new backup_nested_element('comments');
         $comment = new backup_nested_element('comment', ['id'], [
@@ -55,7 +55,19 @@ class backup_vimigallery_activity_structure_step extends backup_activity_structu
         $comments->add_child($comment);
 
         $gallery->set_source_table('vimigallery', ['id' => backup::VAR_ACTIVITYID]);
-        $item->set_source_table('vimigallery_item', ['galleryid' => backup::VAR_PARENTID]);
+
+        // Items materialised from another activity are copies of learners' work
+        // and carry their names, so they are user data and must not travel in a
+        // backup taken without user information. Uploaded items are teacher
+        // content and are always included.
+        if ($userinfo) {
+            $item->set_source_table('vimigallery_item', ['galleryid' => backup::VAR_PARENTID]);
+        } else {
+            $item->set_source_sql(
+                "SELECT * FROM {vimigallery_item} WHERE galleryid = ? AND sourcetype = ?",
+                ['galleryid' => backup::VAR_PARENTID, 'sourcetype' => backup_helper::is_sqlparam('upload')]
+            );
+        }
 
         if ($userinfo) {
             $comment->set_source_table('vimigallery_comment', ['itemid' => backup::VAR_PARENTID]);
