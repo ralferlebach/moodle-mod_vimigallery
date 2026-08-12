@@ -28,6 +28,23 @@
   and takes effect once mod_vimipad exposes a read-only view toggle).
 - Backup/restore and a null privacy provider (no personal data yet).
 
+## 0.3.3 - 2026-08-12
+
+### Added
+- Load-test results for the album fetch are documented in
+  tests/load/RESULTS-2026-08-12.md: 46 436 requests across both runners with zero
+  errors, and a response size flat to within 152 bytes across 24 805 fetches,
+  which is the direct evidence that the lazy path does no per-album work.
+- A test-js target running Jest, now part of `make check`.
+
+### Changed
+- Frontend dependencies can be refreshed before Jest with NPM_REFRESH=1
+  (npm update plus npm audit fix --force). Off by default: --force accepts
+  breaking major versions, which changes the bundled output and therefore the
+  committed amd/build artefacts.
+- `make load-seed` now fails when the seed script fails, instead of reporting
+  success and writing an empty .load-env.
+
 ## 0.3.2 - 2026-08-12
 
 ### Fixed

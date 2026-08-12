@@ -20,6 +20,13 @@ MOODLE_ROOT   ?= $(abspath $(PLUGIN_DIR)/../..)
 PLUGIN_NAME   ?= mod_vimigallery
 PLUGIN_REL    ?= mod/vimigallery
 PHP           ?= $(shell which php 2>/dev/null || echo /usr/bin/php)
+NPM           ?= npm
+# Refresh frontend dependencies before running Jest: `npm update` plus
+# `npm audit fix --force`. Off by default because --force accepts breaking major
+# versions, which changes the bundled output and therefore the committed
+# amd/build artefacts; run it deliberately, then rebuild and re-commit them.
+#   make test-js NPM_REFRESH=1
+NPM_REFRESH   ?= 0
 
 # --- Load-test tooling ------------------------------------------------------
 LOAD_DIR       ?= $(PLUGIN_DIR)/tests/load
@@ -52,7 +59,7 @@ PHPCS         ?= phpcs
 PHPCBF        ?= phpcbf
 NPX           ?= npx
 
-.PHONY: all fix check clear \
+.PHONY: all fix check clear test-js \
         load-seed jmeter jmeter-setup load-k6 k6-setup \
         lint-php fix-lint-php lint-phpdoc fix-phpdoc lint-mustache \
         lint-cpd lint-md lint-js amd build phpunit
@@ -65,7 +72,7 @@ fix: clear fix-phpdoc fix-lint-php amd
 	@echo ""
 	@echo "=== All fixes complete. ==="
 
-check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-md lint-js amd phpunit
+check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-md lint-js amd test-js phpunit
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 
@@ -142,6 +149,24 @@ build: amd
 	@echo ""
 	@echo "=== Front-end build complete (AMD). ==="
 
+test-js:
+	@echo ""
+	@echo "=== Jest (gallery JS logic) ==="
+	@if [ -d $(PLUGIN_DIR)/tests/js ]; then \
+		if [ ! -x $(PLUGIN_DIR)/node_modules/.bin/jest ]; then \
+			echo "Installing frontend dev dependencies..."; \
+			cd $(PLUGIN_DIR) && $(NPM) install --no-audit --no-fund; \
+		fi; \
+		if [ "$(NPM_REFRESH)" = "1" ]; then \
+			echo "Refreshing frontend dependencies (NPM_REFRESH=1)..."; \
+			cd $(PLUGIN_DIR) && $(NPM) update --no-fund || true; \
+			cd $(PLUGIN_DIR) && $(NPM) audit fix --force --no-fund || true; \
+		fi; \
+		cd $(PLUGIN_DIR) && ./node_modules/.bin/jest; \
+	else \
+		echo "No tests/js — Jest skipped."; \
+	fi
+
 phpunit:
 	@echo ""
 	@echo "=== PHPUnit ==="
@@ -172,7 +197,8 @@ phpunit:
 load-seed: clear
 	@echo ""
 	@echo "=== Seed large album + web-service token ($(ITEMS) maps x $(NODESPERMAP) nodes) ==="
-	@$(PHP) $(PLUGIN_DIR)/tests/load/seed_large.php $(ITEMS) $(NODESPERMAP) | tee $(LOAD_DIR)/.load-seed.out
+	@$(PHP) $(PLUGIN_DIR)/tests/load/seed_large.php $(ITEMS) $(NODESPERMAP) > $(LOAD_DIR)/.load-seed.out || { cat $(LOAD_DIR)/.load-seed.out; echo "Seeding failed - see the error above."; rm -f $(LOAD_DIR)/.load-seed.out; exit 1; }
+	@cat $(LOAD_DIR)/.load-seed.out
 	@sed -n "s/^export \([A-Z_][A-Z_]*\)=.\(.*\)./\1=\2/p" $(LOAD_DIR)/.load-seed.out > $(LOAD_DIR)/.load-env
 	@rm -f $(LOAD_DIR)/.load-seed.out
 	@echo ""
