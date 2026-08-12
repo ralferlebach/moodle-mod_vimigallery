@@ -19,3 +19,9 @@
 .vimigallery-slide[hidden] {
     display: none;
 }
+
+/* A map that is still being fetched: keep the pane's footprint stable so the
+   album does not jump as slides load. */
+.vimigallery-loading {
+    opacity: 0.5;
+}

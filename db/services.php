@@ -41,4 +41,12 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimigallery:comment',
     ],
+    'mod_vimigallery_get_item' => [
+        'classname' => 'mod_vimigallery\external\get_item',
+        'methodname' => 'execute',
+        'description' => 'Fetch the map of a single gallery item for lazy loading.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimigallery:view',
+    ],
 ];

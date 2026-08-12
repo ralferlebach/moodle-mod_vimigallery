@@ -71,19 +71,34 @@ class renderer extends plugin_renderer_base {
                 $formconfigs[$item->profile] = \mod_vimipad\profile\profiles::form_config($item->profile);
             }
 
-            $hidden = html_writer::empty_tag('input', [
-                'type' => 'hidden',
-                'id' => $inputid,
-                'value' => (string) $item->mapjson,
-            ]);
+            // Only the first map travels in the page. The rest are fetched as the
+            // viewer reaches them, so an album of a hundred maps does not put a
+            // hundred serialised documents into one HTML response.
+            $inline = ($index === 0);
+            $hidden = $inline
+                ? html_writer::empty_tag('input', [
+                    'type' => 'hidden',
+                    'id' => $inputid,
+                    'value' => (string) $item->mapjson,
+                ])
+                : html_writer::empty_tag('input', [
+                    'type' => 'hidden',
+                    'id' => $inputid,
+                    'value' => '',
+                ]);
             // Dynamic height: grows with the viewport but never below the floor.
-            $container = html_writer::tag('div', '', [
+            $containerattrs = [
                 'id' => $containerid,
                 'class' => 'vimigallery-editor',
                 'style' => 'min-height:480px;height:60vh;',
                 'data-input' => $inputid,
                 'data-profile' => $item->profile,
-            ]);
+            ];
+            if (!$inline) {
+                // The viewer fetches this item's map before mounting it.
+                $containerattrs['data-itemid'] = (string) $item->id;
+            }
+            $container = html_writer::tag('div', '', $containerattrs);
 
             $slidebody = '';
             if ($gallery->show_authors() && $item->authorname !== '') {

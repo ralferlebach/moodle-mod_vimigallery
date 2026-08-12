@@ -28,6 +28,17 @@
   and takes effect once mod_vimipad exposes a read-only view toggle).
 - Backup/restore and a null privacy provider (no personal data yet).
 
+## 0.3.1 - 2026-08-12
+
+### Changed
+- Real lazy loading of maps. The page now carries only its first map; every
+  further map is fetched through the new mod_vimigallery_get_item web service as
+  the viewer reaches it. Previously each map was read from the database, held in
+  PHP, escaped and written into the HTML on every page view, even though only one
+  is ever on screen. The service resolves items through the same renderable the
+  page uses, so item visibility and the per-viewer security of live sources apply
+  unchanged; a failed fetch leaves the slide retryable instead of blank.
+
 ## 0.3.0 - 2026-08-12
 
 First beta. Maturity raised from ALPHA to BETA.

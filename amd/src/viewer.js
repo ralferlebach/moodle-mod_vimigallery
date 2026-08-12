@@ -47,9 +47,10 @@ const getString = (key) => {
  *
  * @param {object} mount The mount descriptor.
  * @param {boolean} showtabs Whether the map/list toggle is enabled.
+ * @param {number} cmid The gallery course module id, for fetching lazy maps.
  * @return {void}
  */
-const mountOne = (mount, showtabs) => {
+const mountOne = (mount, showtabs, cmid) => {
     if (!mount || mount.mounted) {
         return;
     }
@@ -60,20 +61,45 @@ const mountOne = (mount, showtabs) => {
     }
     mount.mounted = true;
 
-    require(['mod_vimipad/editor_lazy'], (editor) => {
-        editor.mountValue(container, {
-            value: input.value || '',
-            onChange: () => {
-                // Read-only: nothing is written back.
-            },
-            profile: mount.profile,
-            readonly: true,
-            formconfig: mount.formconfig,
-            initialView: 'canvas',
-            showViewToggle: showtabs === true,
-            getString: getString,
+    const mountWith = (value) => {
+        require(['mod_vimipad/editor_lazy'], (editor) => {
+            editor.mountValue(container, {
+                value: value || '',
+                onChange: () => {
+                    // Read-only: nothing is written back.
+                },
+                profile: mount.profile,
+                readonly: true,
+                formconfig: mount.formconfig,
+                initialView: 'canvas',
+                showViewToggle: showtabs === true,
+                getString: getString,
+            });
         });
-    });
+    };
+
+    // Maps other than the first are not in the page: fetch this one before
+    // mounting it, so the album stays light no matter how many maps it holds.
+    if (mount.itemid && !input.value) {
+        container.classList.add('vimigallery-loading');
+        Ajax.call([{
+            methodname: 'mod_vimigallery_get_item',
+            args: {cmid: cmid, itemid: mount.itemid},
+        }])[0].then((item) => {
+            input.value = item.mapjson;
+            container.classList.remove('vimigallery-loading');
+            mountWith(item.mapjson);
+            return item;
+        }).catch((error) => {
+            container.classList.remove('vimigallery-loading');
+            // Allow a later swipe to try again rather than leaving a blank pane.
+            mount.mounted = false;
+            Notification.exception(error);
+        });
+        return;
+    }
+
+    mountWith(input.value);
 };
 
 /**
@@ -114,6 +140,7 @@ export const init = (rootId, showtabs, cmid, cancomment) => {
             inputid: container.getAttribute('data-input'),
             profile: profile,
             formconfig: formconfigs[profile],
+            itemid: container.getAttribute('data-itemid'),
         };
     });
     const counter = root.querySelector('[data-vimigallery-current]');
@@ -127,7 +154,7 @@ export const init = (rootId, showtabs, cmid, cancomment) => {
     const ensureMounted = (index) => {
         [index - 1, index, index + 1].forEach((i) => {
             if (i >= 0 && i < total) {
-                mountOne(mounts[i], showtabs);
+                mountOne(mounts[i], showtabs, cmid);
             }
         });
     };
