@@ -131,7 +131,9 @@ class qtype_source implements source_interface {
             $item->authorname = '';
             $item->sortorder = $sortorder++;
             $item->visible = 1;
-            $item->sourceuserid = isset($entry->sourceuserid) ? (int) $entry->sourceuserid : null;
+            // A reference map is the teacher's model answer, never a learner's
+            // work, so it carries no provenance.
+            $item->sourceuserid = null;
             $items[] = $item;
         }
 
@@ -206,7 +208,7 @@ class qtype_source implements source_interface {
             } catch (\Exception $e) {
                 continue;
             }
-            foreach ($slots as $slot => $questionid) {
+            foreach (array_keys($slots) as $slot) {
                 $qa = $quba->get_question_attempt($slot);
                 if (!$qa) {
                     continue;

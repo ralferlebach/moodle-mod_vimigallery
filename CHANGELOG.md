@@ -28,6 +28,23 @@
   and takes effect once mod_vimipad exposes a read-only view toggle).
 - Backup/restore and a null privacy provider (no personal data yet).
 
+## 0.3.2 - 2026-08-12
+
+### Fixed
+- Five language keys were defined twice in both en and de (novimipads,
+  source_vimipad, sourcemode_submissions, vimipadsource, vimipadsource_help),
+  left over from the same incomplete merge that duplicated the form element.
+  phpcs rejects duplicate keys, so this broke the lint job.
+- The qtype reference loop set an item is provenance from a variable that does not
+  exist in that scope. It happened to yield the right value (null), since a
+  reference map is teacher content, but the code was misleading; it now says so
+  explicitly.
+
+### Added
+- Load-test harness (tests/load): seed, JMeter plan and k6 script for the album is
+  lazy item fetch, plus a README. Not distributed (export-ignore), downloads and
+  results gitignored.
+
 ## 0.3.1 - 2026-08-12
 
 ### Changed

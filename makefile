@@ -20,11 +20,40 @@ MOODLE_ROOT   ?= $(abspath $(PLUGIN_DIR)/../..)
 PLUGIN_NAME   ?= mod_vimigallery
 PLUGIN_REL    ?= mod/vimigallery
 PHP           ?= $(shell which php 2>/dev/null || echo /usr/bin/php)
+
+# --- Load-test tooling ------------------------------------------------------
+LOAD_DIR       ?= $(PLUGIN_DIR)/tests/load
+JMETER_VERSION ?= 5.6.3
+JMETER_HOME    ?= $(LOAD_DIR)/apache-jmeter-$(JMETER_VERSION)
+JMETER         ?= $(JMETER_HOME)/bin/jmeter
+K6             ?= k6
+K6_VERSION     ?= 0.54.0
+
+# Base URL read from the site's own config.php ($CFG->wwwroot), lazily: only the
+# load targets expand it. Empty in a bare checkout, then the :8000 fallback wins.
+MOODLE_WWWROOT = $(shell $(PHP) -r "define('CLI_SCRIPT',1); define('ABORT_AFTER_CONFIG',1); @include '$(MOODLE_ROOT)/config.php'; echo isset(\$$CFG->wwwroot) ? \$$CFG->wwwroot : '';" 2>/dev/null)
+
+BASE_URL       ?= $(or $(MOODLE_WWWROOT),http://localhost:8000)
+TOKEN          ?=
+CMID           ?=
+ITEMIDS        ?=
+ITEMS          ?= 100
+NODESPERMAP    ?= 150
+SLIDES         ?= 5
+THREADS        ?= 25
+RAMPUP         ?= 10
+LOOPS          ?= 20
+MAXDURATION    ?= 2000
+
+# Written by `make load-seed`, so jmeter/load-k6 need no manual eval. The leading
+# '-' ignores the file until it exists; a command-line override still wins.
+-include $(LOAD_DIR)/.load-env
 PHPCS         ?= phpcs
 PHPCBF        ?= phpcbf
 NPX           ?= npx
 
 .PHONY: all fix check clear \
+        load-seed jmeter jmeter-setup load-k6 k6-setup \
         lint-php fix-lint-php lint-phpdoc fix-phpdoc lint-mustache \
         lint-cpd lint-md lint-js amd build phpunit
 
@@ -135,3 +164,81 @@ phpunit:
 		rm -f "$$tmpout"; \
 		exit $$phpunit_exit; \
 	fi
+
+# --- Load tests -------------------------------------------------------------
+# These need a live, seeded site. `make load-seed` builds a large album and mints
+# a REST token, then stores the values for the two runners.
+
+load-seed: clear
+	@echo ""
+	@echo "=== Seed large album + web-service token ($(ITEMS) maps x $(NODESPERMAP) nodes) ==="
+	@$(PHP) $(PLUGIN_DIR)/tests/load/seed_large.php $(ITEMS) $(NODESPERMAP) | tee $(LOAD_DIR)/.load-seed.out
+	@sed -n "s/^export \([A-Z_][A-Z_]*\)=.\(.*\)./\1=\2/p" $(LOAD_DIR)/.load-seed.out > $(LOAD_DIR)/.load-env
+	@rm -f $(LOAD_DIR)/.load-seed.out
+	@echo ""
+	@echo "Saved BASE_URL/TOKEN/CMID/ITEMIDS to $(LOAD_DIR)/.load-env"
+	@echo "Now just run:  make jmeter   (or: make load-k6) — no eval needed."
+
+jmeter-setup:
+	@echo ""
+	@echo "=== JMeter setup ==="
+	@if [ -x $(JMETER) ]; then \
+		echo "JMeter $(JMETER_VERSION) already present at $(JMETER_HOME)."; \
+	else \
+		echo "Downloading Apache JMeter $(JMETER_VERSION)..."; \
+		cd $(LOAD_DIR) && \
+		curl -fsSL https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-$(JMETER_VERSION).tgz -o jmeter.tgz && \
+		tar xzf jmeter.tgz && rm -f jmeter.tgz && \
+		echo "Installed to $(JMETER_HOME)."; \
+	fi
+
+jmeter: clear jmeter-setup
+	@echo ""
+	@echo "=== JMeter load test — gallery item fetch ==="
+	@command -v java >/dev/null 2>&1 || { echo "Java (JRE 8+) is required to run JMeter — please install a JRE."; exit 1; }
+	@if [ -z "$(TOKEN)" ] || [ -z "$(CMID)" ]; then \
+		echo "Missing required parameters. Usage:"; \
+		echo "  make jmeter BASE_URL=<wwwroot> TOKEN=<token> CMID=<id> \\"; \
+		echo "             [THREADS=25 RAMPUP=10 LOOPS=20 MAXDURATION=2000]"; \
+		echo ""; \
+		echo "  Run 'make load-seed' first — it seeds the album, mints a token and"; \
+		echo "  writes tests/load/itemids.csv, which the plan reads."; \
+		exit 1; \
+	fi
+	cd $(LOAD_DIR) && $(JMETER) -n -t vimigallery-read-endpoints.jmx \
+		-Jbase_url='$(BASE_URL)' -Jtoken='$(TOKEN)' -Jcmid='$(CMID)' \
+		-Jthreads='$(THREADS)' -Jrampup='$(RAMPUP)' -Jloops='$(LOOPS)' \
+		-Jmaxduration='$(MAXDURATION)' \
+		-l vimigallery-load-results.jtl
+	@echo ""
+	@echo "Results written to $(LOAD_DIR)/vimigallery-load-results.jtl"
+
+k6-setup:
+	@echo ""
+	@echo "=== k6 setup ==="
+	@if command -v $(K6) >/dev/null 2>&1; then \
+		echo "k6 already on PATH."; \
+	elif [ -x $(LOAD_DIR)/k6 ]; then \
+		echo "k6 already present at $(LOAD_DIR)/k6."; \
+	else \
+		arch=$$(uname -m); case "$$arch" in x86_64) a=amd64;; aarch64|arm64) a=arm64;; *) a=amd64;; esac; \
+		echo "Downloading k6 $(K6_VERSION) (linux-$$a)..."; \
+		cd $(LOAD_DIR) && \
+		curl -fsSL "https://github.com/grafana/k6/releases/download/v$(K6_VERSION)/k6-v$(K6_VERSION)-linux-$$a.tar.gz" -o k6.tgz && \
+		tar xzf k6.tgz && cp "k6-v$(K6_VERSION)-linux-$$a/k6" ./k6 && chmod +x ./k6 && \
+		rm -rf k6.tgz "k6-v$(K6_VERSION)-linux-$$a" && \
+		echo "Installed to $(LOAD_DIR)/k6"; \
+	fi
+
+load-k6: clear k6-setup
+	@echo ""
+	@echo "=== k6 load test — gallery item fetch ==="
+	@if [ -z "$(TOKEN)" ] || [ -z "$(CMID)" ]; then \
+		echo "Missing required parameters. Usage:"; \
+		echo "  make load-k6 BASE_URL=<wwwroot> TOKEN=<token> CMID=<id> ITEMIDS=<id,id,...> [SLIDES=5]"; \
+		exit 1; \
+	fi
+	@K6BIN=$$(command -v $(K6) 2>/dev/null || echo "$(LOAD_DIR)/k6"); \
+	cd $(LOAD_DIR) && "$$K6BIN" run vimigallery-read-endpoints.k6.js \
+		-e BASE_URL='$(BASE_URL)' -e TOKEN='$(TOKEN)' \
+		-e CMID='$(CMID)' -e ITEMIDS='$(ITEMIDS)' -e SLIDES='$(SLIDES)'
