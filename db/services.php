@@ -33,4 +33,12 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimigallery:manageitems',
     ],
+    'mod_vimigallery_post_comment' => [
+        'classname' => 'mod_vimigallery\external\post_comment',
+        'methodname' => 'execute',
+        'description' => 'Post a comment on a map in a gallery.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimigallery:comment',
+    ],
 ];

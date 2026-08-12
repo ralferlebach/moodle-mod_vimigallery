@@ -34,6 +34,8 @@ function vimigallery_supports($feature) {
         case FEATURE_SHOW_DESCRIPTION:
         case FEATURE_BACKUP_MOODLE2:
             return true;
+        case FEATURE_COMPLETION_HAS_RULES:
+            return true;
         case FEATURE_GRADE_HAS_GRADE:
         case FEATURE_COMPLETION_TRACKS_VIEWS:
             return false;
@@ -202,54 +204,99 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
     global $DB;
 
     $gallery = $DB->get_record('vimigallery', ['id' => $galleryid], '*', MUST_EXIST);
+
+    // Remember which content each existing comment belonged to, so comments can
+    // survive a rebuild when the same map is still present.
+    $oldcomments = $DB->get_records_sql(
+        "SELECT c.id, i.contenthash
+           FROM {vimigallery_comment} c
+           JOIN {vimigallery_item} i ON i.id = c.itemid
+          WHERE c.galleryid = :galleryid",
+        ['galleryid' => $galleryid]
+    );
+
     $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
 
-    // Activity sources: materialise for static/snapshot; live keeps no items.
+    $entries = [];
     $source = vimigallery_make_source($gallery);
     if ($source !== null) {
-        if ($gallery->freshness === 'live') {
-            return;
+        // Activity sources: materialise for static/snapshot; live keeps no items.
+        if ($gallery->freshness !== 'live') {
+            foreach ($source->get_items() as $sourceitem) {
+                $entries[] = [
+                    'sourcetype' => $gallery->sourcetype,
+                    'profile' => $sourceitem->profile,
+                    'mapjson' => $sourceitem->mapjson,
+                    'authorname' => $sourceitem->authorname,
+                ];
+            }
         }
-        $sortorder = 0;
-        foreach ($source->get_items() as $sourceitem) {
-            $DB->insert_record('vimigallery_item', (object) [
-                'galleryid' => $galleryid,
-                'sortorder' => $sortorder++,
-                'visible' => 1,
-                'sourcetype' => $gallery->sourcetype,
-                'profile' => $sourceitem->profile,
-                'mapjson' => $sourceitem->mapjson,
-                'authorname' => $sourceitem->authorname,
-                'timecreated' => time(),
-            ]);
+    } else {
+        // Upload source (default): one frozen item per stored JSON file.
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($context->id, 'mod_vimigallery', 'source', 0, 'filename', false);
+        foreach ($files as $file) {
+            $content = $file->get_content();
+            $decoded = json_decode($content, true);
+            if (!is_array($decoded) || !isset($decoded['nodes'])) {
+                continue;
+            }
+            $profile = isset($decoded['profile']) && is_string($decoded['profile'])
+                ? $decoded['profile'] : 'conceptmap';
+            $author = isset($decoded['author']) && is_string($decoded['author'])
+                ? $decoded['author'] : '';
+            $entries[] = [
+                'sourcetype' => 'upload',
+                'profile' => core_text::substr($profile, 0, 40),
+                'mapjson' => $content,
+                'authorname' => core_text::substr($author, 0, 255),
+            ];
         }
-        return;
     }
 
-    // Upload source (default): one frozen item per stored JSON file.
-    $fs = get_file_storage();
-    $files = $fs->get_area_files($context->id, 'mod_vimigallery', 'source', 0, 'filename', false);
-
     $sortorder = 0;
-    foreach ($files as $file) {
-        $decoded = json_decode($file->get_content(), true);
-        if (!is_array($decoded) || !isset($decoded['nodes'])) {
-            continue;
-        }
-        $profile = isset($decoded['profile']) && is_string($decoded['profile'])
-            ? $decoded['profile'] : 'conceptmap';
-        $author = isset($decoded['author']) && is_string($decoded['author'])
-            ? $decoded['author'] : '';
+    foreach ($entries as $entry) {
         $DB->insert_record('vimigallery_item', (object) [
             'galleryid' => $galleryid,
             'sortorder' => $sortorder++,
             'visible' => 1,
-            'sourcetype' => 'upload',
-            'profile' => core_text::substr($profile, 0, 40),
-            'mapjson' => $file->get_content(),
-            'authorname' => core_text::substr($author, 0, 255),
+            'sourcetype' => $entry['sourcetype'],
+            'profile' => $entry['profile'],
+            'mapjson' => $entry['mapjson'],
+            'authorname' => $entry['authorname'],
+            'contenthash' => sha1($entry['mapjson']),
             'timecreated' => time(),
         ]);
+    }
+
+    vimigallery_relink_comments($galleryid, $oldcomments);
+}
+
+/**
+ * Re-attach or drop comments after a rebuild, matching on item content hash.
+ *
+ * @param int $galleryid The gallery instance id.
+ * @param array $oldcomments Records of id => (id, contenthash) captured before rebuild.
+ * @return void
+ */
+function vimigallery_relink_comments($galleryid, array $oldcomments) {
+    global $DB;
+    if (empty($oldcomments)) {
+        return;
+    }
+    $newitems = $DB->get_records('vimigallery_item', ['galleryid' => $galleryid], '', 'id, contenthash');
+    $hashtoid = [];
+    foreach ($newitems as $item) {
+        if ($item->contenthash !== '' && !isset($hashtoid[$item->contenthash])) {
+            $hashtoid[$item->contenthash] = $item->id;
+        }
+    }
+    foreach ($oldcomments as $comment) {
+        if ($comment->contenthash !== '' && isset($hashtoid[$comment->contenthash])) {
+            $DB->set_field('vimigallery_comment', 'itemid', $hashtoid[$comment->contenthash], ['id' => $comment->id]);
+        } else {
+            $DB->delete_records('vimigallery_comment', ['id' => $comment->id]);
+        }
     }
 }
 
@@ -316,7 +363,7 @@ function vimigallery_get_coursemodule_info($coursemodule) {
     $gallery = $DB->get_record(
         'vimigallery',
         ['id' => $coursemodule->instance],
-        'id, name, intro, introformat, displaymode',
+        'id, name, intro, introformat, displaymode, completioncommentsmin',
         MUST_EXIST
     );
 
@@ -324,6 +371,11 @@ function vimigallery_get_coursemodule_info($coursemodule) {
     $info->name = $gallery->name;
     // Carry the display mode so cm_info_view can decide without another query.
     $info->customdata = ['displaymode' => $gallery->displaymode];
+
+    if ($coursemodule->completion == COMPLETION_TRACKING_AUTOMATIC) {
+        $info->customdata['customcompletionrules']['completioncommentsmin'] =
+            (int) $gallery->completioncommentsmin;
+    }
 
     if ($coursemodule->showdescription) {
         $info->content = format_module_intro('vimigallery', $gallery, $coursemodule->id, false);

@@ -32,21 +32,35 @@ class backup_vimigallery_activity_structure_step extends backup_activity_structu
      * @return backup_nested_element The root element.
      */
     protected function define_structure() {
+        $userinfo = $this->get_setting_value('userinfo');
+
         $gallery = new backup_nested_element('vimigallery', ['id'], [
             'name', 'intro', 'introformat', 'displaymode', 'showtabs',
-            'showauthors', 'timemodified',
+            'showauthors', 'sourcetype', 'sourcecmid', 'sourcefieldid', 'freshness',
+            'sourcemode', 'allowcomments', 'completioncommentsmin', 'enablecompare', 'timemodified',
         ]);
         $items = new backup_nested_element('items');
         $item = new backup_nested_element('item', ['id'], [
             'sortorder', 'visible', 'sourcetype', 'profile', 'mapjson',
-            'authorname', 'timecreated',
+            'authorname', 'contenthash', 'timecreated',
+        ]);
+        $comments = new backup_nested_element('comments');
+        $comment = new backup_nested_element('comment', ['id'], [
+            'userid', 'content', 'format', 'timecreated', 'timemodified',
         ]);
 
         $gallery->add_child($items);
         $items->add_child($item);
+        $item->add_child($comments);
+        $comments->add_child($comment);
 
         $gallery->set_source_table('vimigallery', ['id' => backup::VAR_ACTIVITYID]);
         $item->set_source_table('vimigallery_item', ['galleryid' => backup::VAR_PARENTID]);
+
+        if ($userinfo) {
+            $comment->set_source_table('vimigallery_comment', ['itemid' => backup::VAR_PARENTID]);
+            $comment->annotate_ids('user', 'userid');
+        }
 
         $gallery->annotate_files('mod_vimigallery', 'intro', null);
         $gallery->annotate_files('mod_vimigallery', 'source', null);

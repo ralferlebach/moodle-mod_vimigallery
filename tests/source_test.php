@@ -44,6 +44,24 @@ final class source_test extends \advanced_testcase {
     }
 
     /**
+     * Skip the test unless an optional peer plugin is installed.
+     *
+     * The datafield and qtype integrations are optional peers; in an environment
+     * where only mod_vimipad is present as a dependency (as in this plugin's own
+     * CI) their tests are skipped rather than failed.
+     *
+     * @param string $relpath A file that exists only when the peer is installed.
+     * @param string $name The peer plugin name, for the skip message.
+     * @return void
+     */
+    private function require_peer(string $relpath, string $name): void {
+        global $CFG;
+        if (!file_exists($CFG->dirroot . '/' . $relpath)) {
+            $this->markTestSkipped($name . ' is not installed in this environment.');
+        }
+    }
+
+    /**
      * Create a submitted individual workspace with the given map.
      *
      * @param int $vimipadid The activity instance id.
@@ -104,6 +122,7 @@ final class source_test extends \advanced_testcase {
      * @return void
      */
     public function test_approval_visibility(): void {
+        $this->require_peer('mod/data/field/vimipad/field.class.php', 'datafield_vimipad');
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();
 
@@ -142,6 +161,7 @@ final class source_test extends \advanced_testcase {
      * @return void
      */
     public function test_separate_groups_visibility(): void {
+        $this->require_peer('mod/data/field/vimipad/field.class.php', 'datafield_vimipad');
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();
 
@@ -186,6 +206,7 @@ final class source_test extends \advanced_testcase {
      * @return void
      */
     public function test_invalid_field_returns_empty(): void {
+        $this->require_peer('mod/data/field/vimipad/field.class.php', 'datafield_vimipad');
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();
 
@@ -206,6 +227,7 @@ final class source_test extends \advanced_testcase {
      */
     public function test_qtype_reference_visibility(): void {
         global $DB, $CFG;
+        $this->require_peer('question/type/vimipad/tests/helper.php', 'qtype_vimipad');
         require_once($CFG->dirroot . '/mod/quiz/locallib.php');
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();
@@ -293,6 +315,7 @@ final class source_test extends \advanced_testcase {
      */
     public function test_qtype_submissions_visibility(): void {
         global $CFG;
+        $this->require_peer('question/type/vimipad/tests/helper.php', 'qtype_vimipad');
         require_once($CFG->dirroot . '/mod/quiz/locallib.php');
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();

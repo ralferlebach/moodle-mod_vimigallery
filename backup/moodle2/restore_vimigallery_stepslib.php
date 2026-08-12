@@ -35,6 +35,12 @@ class restore_vimigallery_activity_structure_step extends restore_activity_struc
         $paths = [];
         $paths[] = new restore_path_element('vimigallery', '/activity/vimigallery');
         $paths[] = new restore_path_element('vimigallery_item', '/activity/vimigallery/items/item');
+        if ($this->get_setting_value('userinfo')) {
+            $paths[] = new restore_path_element(
+                'vimigallery_comment',
+                '/activity/vimigallery/items/item/comments/comment'
+            );
+        }
         return $this->prepare_activity_structure($paths);
     }
 
@@ -62,8 +68,25 @@ class restore_vimigallery_activity_structure_step extends restore_activity_struc
     protected function process_vimigallery_item($data) {
         global $DB;
         $data = (object) $data;
+        $oldid = $data->id;
         $data->galleryid = $this->get_new_parentid('vimigallery');
-        $DB->insert_record('vimigallery_item', $data);
+        $newid = $DB->insert_record('vimigallery_item', $data);
+        $this->set_mapping('vimigallery_item', $oldid, $newid);
+    }
+
+    /**
+     * Restore one comment on a map.
+     *
+     * @param array $data The comment data.
+     * @return void
+     */
+    protected function process_vimigallery_comment($data) {
+        global $DB;
+        $data = (object) $data;
+        $data->itemid = $this->get_new_parentid('vimigallery_item');
+        $data->galleryid = $this->get_new_parentid('vimigallery');
+        $data->userid = $this->get_mappingid('user', $data->userid);
+        $DB->insert_record('vimigallery_comment', $data);
     }
 
     /**

@@ -26,7 +26,47 @@
   embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
   minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
   and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).## 0.2.8 - 2026-08-11
+- Backup/restore and a null privacy provider (no personal data yet).## 0.2.12 - 2026-08-11
+
+### Added
+- Backup/restore roundtrip test: proves a gallerys settings, items (with content
+  hash) and comments (re-linked, with user mapping) survive a course backup and
+  restore into a new course.
+- Behat scenarios: creating a gallery with the comment and compare options, and
+  reaching the compare view. All steps resolve against existing step definitions.
+
+## 0.2.11 - 2026-08-11
+
+### Added
+- Side-by-side comparison: when the teacher enables it, a "Compare" view lets
+  users place any two maps of the gallery next to each other, both read-only.
+- Optional similarity score between the two maps, computed with mod_vimipads
+  public scoring facade (token matching), shown as a percentage.
+- Optional coupled scrolling so both panes move together.
+
+## 0.2.10 - 2026-08-11
+
+### Added
+- Per-map comments: learners with the new mod/vimigallery:comment capability can
+  comment on each map in the album when the teacher enables comments. Comments are
+  posted via a web service and appended in place.
+- Completion rule "require comments": mark the activity complete once a learner has
+  posted at least a configurable number of comments.
+- Comments survive a rebuild/refresh: each item now carries a content hash and
+  comments are re-linked to the same map by content; comments on maps that have
+  disappeared are removed.
+- Full privacy provider covering comments (export and deletion) and backup/restore
+  of comments (with the userinfo setting).
+
+## 0.2.9 - 2026-08-11
+
+### Fixed
+- CI: the datafield and qtype source tests now skip gracefully when their optional
+  peer plugin (datafield_vimipad / qtype_vimipad) is not installed, instead of
+  failing. This plugins own CI only installs mod_vimipad as a dependency, so the
+  qtype integration tests could not create a vimipad question there. The tests run
+  fully in an environment where the peer plugins are present.
+## 0.2.8 - 2026-08-11
 
 ### Added
 - Qtype submissions mode: a gallery can show the learners submitted maps from the

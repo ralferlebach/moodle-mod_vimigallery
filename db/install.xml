@@ -18,6 +18,9 @@
         <FIELD NAME="sourcefieldid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="source field id (datafield: the vimipad data field)"/>
         <FIELD NAME="freshness" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="live" SEQUENCE="false" COMMENT="live | static | snapshot"/>
         <FIELD NAME="sourcemode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="reference" SEQUENCE="false" COMMENT="qtype/vimipad: reference | submissions"/>
+        <FIELD NAME="allowcomments" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether learners may comment on maps"/>
+        <FIELD NAME="completioncommentsmin" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Completion: minimum number of comments required (0 = rule off)"/>
+        <FIELD NAME="enablecompare" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the side-by-side compare view is offered"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
@@ -35,6 +38,7 @@
         <FIELD NAME="profile" TYPE="char" LENGTH="40" NOTNULL="true" DEFAULT="conceptmap" SEQUENCE="false"/>
         <FIELD NAME="mapjson" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The serialised map value (frozen for uploads)"/>
         <FIELD NAME="authorname" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="contenthash" TYPE="char" LENGTH="40" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="sha1 of the map content, stable across rebuilds"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
@@ -43,6 +47,27 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="galleryid-sortorder" UNIQUE="false" FIELDS="galleryid, sortorder"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="vimigallery_comment" COMMENT="Learner comments on individual maps">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="galleryid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="format" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="galleryid" TYPE="foreign" FIELDS="galleryid" REFTABLE="vimigallery" REFFIELDS="id"/>
+        <KEY NAME="itemid" TYPE="foreign" FIELDS="itemid" REFTABLE="vimigallery_item" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="itemid-timecreated" UNIQUE="false" FIELDS="itemid, timecreated"/>
       </INDEXES>
     </TABLE>
   </TABLES>

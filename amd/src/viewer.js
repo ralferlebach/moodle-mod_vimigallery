@@ -26,6 +26,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+
+import Ajax from 'core/ajax';
+import Notification from 'core/notification';
+
 /**
  * Resolve a mod_vimipad editor string from the preloaded strings.
  *
@@ -76,9 +80,11 @@ const mountOne = (mount, showtabs) => {
  *
  * @param {string} rootId The id of the gallery root element.
  * @param {boolean} showtabs Whether the map/list toggle is enabled.
+ * @param {number} cmid The gallery course module id (for comment posting).
+ * @param {boolean} cancomment Whether the current user may post comments.
  * @return {void}
  */
-export const init = (rootId, showtabs) => {
+export const init = (rootId, showtabs, cmid, cancomment) => {
     const root = document.getElementById(rootId);
     if (!root) {
         return;
@@ -183,5 +189,46 @@ export const init = (rootId, showtabs) => {
             }
             startx = null;
         }, {passive: true});
+    }
+
+    // Comment posting: submit via web service and append the new comment.
+    if (cancomment && cmid) {
+        root.querySelectorAll('[data-comment-submit]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const itemid = parseInt(button.getAttribute('data-comment-submit'), 10);
+                const input = root.querySelector('[data-comment-input="' + itemid + '"]');
+                const list = root.querySelector('[data-comments-for="' + itemid + '"]');
+                if (!input || !list) {
+                    return;
+                }
+                const content = input.value.trim();
+                if (content === '') {
+                    return;
+                }
+                button.disabled = true;
+                Ajax.call([{
+                    methodname: 'mod_vimigallery_post_comment',
+                    args: {cmid: cmid, itemid: itemid, content: content},
+                }])[0].then((comment) => {
+                    const li = document.createElement('li');
+                    li.className = 'vimigallery-comment';
+                    const meta = document.createElement('span');
+                    meta.className = 'vimigallery-comment-meta text-muted small';
+                    meta.textContent = comment.authorname;
+                    const body = document.createElement('div');
+                    body.className = 'vimigallery-comment-body';
+                    body.textContent = comment.content;
+                    li.appendChild(meta);
+                    li.appendChild(body);
+                    list.appendChild(li);
+                    input.value = '';
+                    button.disabled = false;
+                    return comment;
+                }).catch((error) => {
+                    button.disabled = false;
+                    Notification.exception(error);
+                });
+            });
+        });
     }
 };

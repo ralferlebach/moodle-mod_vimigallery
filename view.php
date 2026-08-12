@@ -63,6 +63,17 @@ if (has_capability('mod/vimigallery:manageitems', $context)) {
     );
 }
 
+if (!empty($gallery->enablecompare)) {
+    echo html_writer::div(
+        html_writer::link(
+            new moodle_url('/mod/vimigallery/compare.php', ['id' => $cm->id]),
+            get_string('compare', 'mod_vimigallery'),
+            ['class' => 'btn btn-outline-secondary btn-sm']
+        ),
+        'mb-3'
+    );
+}
+
 if (!empty($gallery->intro)) {
     echo $OUTPUT->box(
         format_module_intro('vimigallery', $gallery, $cm->id),

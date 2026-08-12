@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_vimigallery';
-$plugin->version      = 2026081109;
-$plugin->release      = '0.2.8';
+$plugin->version      = 2026081113;
+$plugin->release      = '0.2.12';
 $plugin->requires     = 2024100700;
 $plugin->maturity     = MATURITY_ALPHA;
 $plugin->dependencies = [

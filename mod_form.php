@@ -150,6 +150,14 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->setDefault('showauthors', 0);
         $mform->addHelpButton('showauthors', 'showauthors', 'mod_vimigallery');
 
+                $mform->addElement('advcheckbox', 'allowcomments', get_string('allowcomments', 'mod_vimigallery'));
+        $mform->addHelpButton('allowcomments', 'allowcomments', 'mod_vimigallery');
+        $mform->setDefault('allowcomments', 0);
+
+        $mform->addElement('advcheckbox', 'enablecompare', get_string('enablecompare', 'mod_vimigallery'));
+        $mform->addHelpButton('enablecompare', 'enablecompare', 'mod_vimigallery');
+        $mform->setDefault('enablecompare', 0);
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
     }
@@ -184,8 +192,70 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'vimipad') {
             $defaultvalues['vimipadsource'] = $this->current->sourcecmid;
         }
+        $defaultvalues['completioncommentsenabled'] =
+            !empty($defaultvalues['completioncommentsmin']) ? 1 : 0;
         if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'vimipad') {
             $defaultvalues['vimipadsource'] = $this->current->sourcecmid;
         }
+        $defaultvalues['completioncommentsenabled'] =
+            !empty($defaultvalues['completioncommentsmin']) ? 1 : 0;
+    }
+    /**
+     * Add the comment-count completion rule.
+     *
+     * @return string[] The names of the added rule group elements.
+     */
+    public function add_completion_rules() {
+        $mform = $this->_form;
+        $group = [
+            $mform->createElement(
+                'checkbox',
+                'completioncommentsenabled',
+                '',
+                get_string('completioncomments', 'mod_vimigallery')
+            ),
+            $mform->createElement('text', 'completioncommentsmin', '', ['size' => 3]),
+        ];
+        $mform->setType('completioncommentsmin', PARAM_INT);
+        $mform->addGroup(
+            $group,
+            'completioncommentsgroup',
+            get_string('completioncommentsgroup', 'mod_vimigallery'),
+            [' '],
+            false
+        );
+        $mform->hideIf('completioncommentsmin', 'completioncommentsenabled', 'notchecked');
+        $mform->setDefault('completioncommentsmin', 1);
+        return ['completioncommentsgroup'];
+    }
+
+    /**
+     * Whether any completion rule is enabled.
+     *
+     * @param array $data The submitted form data.
+     * @return bool True if the comment rule is active.
+     */
+    public function completion_rule_enabled($data) {
+        return !empty($data['completioncommentsenabled']) && $data['completioncommentsmin'] > 0;
+    }
+
+    /**
+     * Normalise completion data on submit.
+     *
+     * @return object|null The processed form data.
+     */
+    public function get_data() {
+        $data = parent::get_data();
+        if (!$data) {
+            return $data;
+        }
+        if (!empty($data->completionunlocked)) {
+            $autocompletion = !empty($data->completion)
+                && $data->completion == COMPLETION_TRACKING_AUTOMATIC;
+            if (empty($data->completioncommentsenabled) || !$autocompletion) {
+                $data->completioncommentsmin = 0;
+            }
+        }
+        return $data;
     }
 }

@@ -59,5 +59,73 @@ function xmldb_vimigallery_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026081105, 'vimigallery');
     }
 
+    if ($oldversion < 2026081111) {
+        // Add the comment and completion settings to the instance.
+        $table = new xmldb_table('vimigallery');
+        $field = new xmldb_field('allowcomments', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'sourcemode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field(
+            'completioncommentsmin',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'allowcomments'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Add a content hash to items.
+        $table = new xmldb_table('vimigallery_item');
+        $field = new xmldb_field('contenthash', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, '', 'authorname');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Create the comment table.
+        $table = new xmldb_table('vimigallery_comment');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('galleryid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('itemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('content', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+            $table->add_field('format', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '1');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('galleryid', XMLDB_KEY_FOREIGN, ['galleryid'], 'vimigallery', ['id']);
+            $table->add_key('itemid', XMLDB_KEY_FOREIGN, ['itemid'], 'vimigallery_item', ['id']);
+            $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+            $table->add_index('itemid-timecreated', XMLDB_INDEX_NOTUNIQUE, ['itemid', 'timecreated']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026081111, 'vimigallery');
+    }
+
+    if ($oldversion < 2026081112) {
+        $table = new xmldb_table('vimigallery');
+        $field = new xmldb_field(
+            'enablecompare',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'completioncommentsmin'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026081112, 'vimigallery');
+    }
+
     return true;
 }

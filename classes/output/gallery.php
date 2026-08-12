@@ -86,4 +86,41 @@ class gallery implements renderable {
     public function show_authors(): bool {
         return !empty($this->instance->showauthors);
     }
+
+    /**
+     * Whether commenting is enabled on this gallery.
+     *
+     * @return bool True if learners may comment.
+     */
+    public function allow_comments(): bool {
+        return !empty($this->instance->allowcomments);
+    }
+
+    /**
+     * Whether the current user may post comments here.
+     *
+     * @return bool True if the user has the comment capability.
+     */
+    public function can_comment(): bool {
+        return $this->allow_comments()
+            && has_capability('mod/vimigallery:comment', \context_module::instance($this->cm->id));
+    }
+
+    /**
+     * The course module id of this gallery.
+     *
+     * @return int The cmid.
+     */
+    public function cmid(): int {
+        return (int) $this->cm->id;
+    }
+
+    /**
+     * Whether the side-by-side compare view is offered.
+     *
+     * @return bool True if compare is enabled.
+     */
+    public function enable_compare(): bool {
+        return !empty($this->instance->enablecompare);
+    }
 }

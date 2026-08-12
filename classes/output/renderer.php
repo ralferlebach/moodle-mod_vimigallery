@@ -89,6 +89,12 @@ class renderer extends plugin_renderer_base {
             }
             $slidebody .= $hidden . $container;
 
+            // Comments belong to materialised items (numeric ids); live sources
+            // have synthetic ids and are not commentable.
+            if ($gallery->allow_comments() && is_numeric($item->id)) {
+                $slidebody .= $this->render_comments($gallery, (int) $item->id);
+            }
+
             // Only the first slide is visible initially; the rest are hidden and
             // mounted lazily as the learner swipes to them.
             $slideattrs = ['class' => 'vimigallery-slide', 'data-index' => $index];
@@ -135,12 +141,174 @@ class renderer extends plugin_renderer_base {
         $this->page->requires->js_call_amd('mod_vimigallery/viewer', 'init', [
             $rootid,
             (bool) $gallery->show_tabs(),
+            $gallery->cmid(),
+            (bool) $gallery->can_comment(),
         ]);
 
         return html_writer::div(
             $configscript . $track . $controls,
             'vimigallery',
             ['id' => $rootid, 'data-vimigallery' => '1']
+        );
+    }
+
+    /**
+     * Render the comment list and (if allowed) the post form for one map.
+     *
+     * @param gallery $gallery The gallery renderable.
+     * @param int $itemid The materialised item id.
+     * @return string The comments HTML.
+     */
+    protected function render_comments(gallery $gallery, int $itemid): string {
+        $comments = \mod_vimigallery\local\comment_service::get_for_item($itemid);
+
+        $list = '';
+        foreach ($comments as $comment) {
+            $meta = html_writer::tag(
+                'span',
+                s($comment->authorname) . ' · ' . userdate($comment->timecreated),
+                ['class' => 'vimigallery-comment-meta text-muted small']
+            );
+            $body = html_writer::tag('div', nl2br(s($comment->content)), ['class' => 'vimigallery-comment-body']);
+            $list .= html_writer::tag('li', $meta . $body, ['class' => 'vimigallery-comment']);
+        }
+        $listhtml = html_writer::tag('ul', $list, [
+            'class' => 'vimigallery-comments list-unstyled',
+            'data-comments-for' => $itemid,
+        ]);
+
+        $form = '';
+        if ($gallery->can_comment()) {
+            $textarea = html_writer::tag('textarea', '', [
+                'class' => 'form-control vimigallery-comment-input',
+                'rows' => 2,
+                'data-comment-input' => $itemid,
+                'aria-label' => get_string('addcomment', 'mod_vimigallery'),
+            ]);
+            $button = html_writer::tag('button', get_string('addcomment', 'mod_vimigallery'), [
+                'type' => 'button',
+                'class' => 'btn btn-secondary btn-sm mt-1 vimigallery-comment-submit',
+                'data-comment-submit' => $itemid,
+            ]);
+            $form = html_writer::div($textarea . $button, 'vimigallery-comment-form mt-2');
+        }
+
+        return html_writer::div(
+            html_writer::tag('h5', get_string('comments', 'mod_vimigallery'), ['class' => 'mt-3 h6'])
+            . $listhtml . $form,
+            'vimigallery-comment-section'
+        );
+    }
+
+    /**
+     * Render the side-by-side comparison view: two selectors, two read-only maps
+     * and an optional similarity score.
+     *
+     * @param compare $compare The comparison renderable.
+     * @return string The comparison HTML.
+     */
+    protected function render_compare(compare $compare): string {
+        $items = $compare->get_items();
+        $rootid = 'vimigallerycmp_' . $compare->instance->id;
+
+        // Build the two selectors as a plain GET form.
+        $options = ['' => get_string('choosemap', 'mod_vimigallery')];
+        $index = 1;
+        foreach ($items as $item) {
+            $label = ($item->authorname !== '')
+                ? $item->authorname
+                : get_string('mapn', 'mod_vimigallery', $index);
+            $options[(string) $item->id] = $label;
+            $index++;
+        }
+        $leftid = $compare->get_left() ? (string) $compare->get_left()->id : '';
+        $rightid = $compare->get_right() ? (string) $compare->get_right()->id : '';
+
+        $url = new \moodle_url('/mod/vimigallery/compare.php', ['id' => $compare->cmid()]);
+        $selectors = html_writer::start_tag('form', [
+            'method' => 'get', 'action' => $url->out_omit_querystring(), 'class' => 'form-inline mb-3',
+        ]);
+        $selectors .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $compare->cmid()]);
+        $selectors .= html_writer::label(get_string('compareleft', 'mod_vimigallery'), 'cmpleft', true, ['class' => 'mr-1']);
+        $selectors .= html_writer::select($options, 'left', $leftid, false, ['id' => 'cmpleft', 'class' => 'mr-3']);
+        $selectors .= html_writer::label(get_string('compareright', 'mod_vimigallery'), 'cmpright', true, ['class' => 'mr-1']);
+        $selectors .= html_writer::select($options, 'right', $rightid, false, ['id' => 'cmpright', 'class' => 'mr-3']);
+        $selectors .= html_writer::tag(
+            'button',
+            get_string('compare', 'mod_vimigallery'),
+            ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']
+        );
+        $selectors .= html_writer::end_tag('form');
+
+        // Nothing selected yet: just the selectors.
+        if ($compare->get_left() === null || $compare->get_right() === null) {
+            return html_writer::div($selectors, 'vimigallery-compare', ['id' => $rootid]);
+        }
+
+        $this->preload_editor_strings();
+
+        // Similarity line.
+        $similarity = $compare->similarity();
+        $simhtml = '';
+        if ($similarity !== null) {
+            $pct = round($similarity * 100);
+            $simhtml = html_writer::div(
+                get_string('similarity', 'mod_vimigallery', $pct),
+                'vimigallery-similarity alert alert-info'
+            );
+        }
+
+        // Coupled-scroll toggle.
+        $toggle = html_writer::div(
+            html_writer::checkbox(
+                'coupledscroll',
+                1,
+                false,
+                get_string('coupledscroll', 'mod_vimigallery'),
+                ['data-compare-couple' => '1']
+            ),
+            'vimigallery-compare-toggle mb-2'
+        );
+
+        // Two read-only panes.
+        $formconfigs = [];
+        $panes = '';
+        foreach (['left' => $compare->get_left(), 'right' => $compare->get_right()] as $side => $item) {
+            if (!isset($formconfigs[$item->profile])) {
+                $formconfigs[$item->profile] = \mod_vimipad\profile\profiles::form_config($item->profile);
+            }
+            $inputid = $rootid . '_' . $side . '_value';
+            $containerid = $rootid . '_' . $side . '_editor';
+            $header = html_writer::tag(
+                'h5',
+                ($item->authorname !== '' ? s($item->authorname) : get_string('map', 'mod_vimigallery')),
+                ['class' => 'h6']
+            );
+            $hidden = html_writer::empty_tag('input', ['type' => 'hidden', 'id' => $inputid, 'value' => (string) $item->mapjson]);
+            $container = html_writer::tag('div', '', [
+                'id' => $containerid,
+                'class' => 'vimigallery-editor vimigallery-compare-pane',
+                'style' => 'min-height:420px;height:55vh;',
+                'data-input' => $inputid,
+                'data-profile' => $item->profile,
+                'data-compare-side' => $side,
+            ]);
+            $panes .= html_writer::div($header . $hidden . $container, 'col-md-6');
+        }
+        $grid = html_writer::div($panes, 'row vimigallery-compare-grid');
+
+        $configscript = html_writer::tag(
+            'script',
+            json_encode($formconfigs, JSON_HEX_TAG | JSON_HEX_AMP),
+            ['type' => 'application/json', 'id' => $rootid . '_formconfigs']
+        );
+
+        $this->page->requires->js_call_amd('mod_vimigallery/compare', 'init', [$rootid]);
+
+        return html_writer::div(
+            $selectors . $simhtml . $toggle . $configscript . $grid,
+            'vimigallery-compare',
+            ['id' => $rootid, 'data-vimigallery-compare' => '1']
         );
     }
 
