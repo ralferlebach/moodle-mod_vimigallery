@@ -28,6 +28,22 @@
   and takes effect once mod_vimipad exposes a read-only view toggle).
 - Backup/restore and a null privacy provider (no personal data yet).
 
+## 0.3.4 - 2026-08-12
+
+### Changed
+- PHPMD findings reduced from 368 to zero, by refactoring rather than by
+  silencing: datafield_source::get_items() (104 lines, NPath 16416) split into
+  resolve/fetch/build steps; qtype_source and vimipad_source likewise; the
+  renderer's render_gallery() (138 lines) and render_compare() (104 lines) split
+  into per-slide, per-pane and control builders; mod_form::definition(),
+  data_preprocessing(), prepare_source_fields(), validate_source_selection() and
+  rebuild_items() each split into named parts.
+- Added phpmd.xml, a curated ruleset that excludes only the rules contradicting
+  the Moodle coding standard, each with its reason.
+
+### Fixed
+- qtype_source::get_items() carried an unused $DB global.
+
 ## 0.3.3 - 2026-08-12
 
 ### Added

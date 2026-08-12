@@ -86,33 +86,28 @@ class vimipad_source implements source_interface {
             ]);
         }
 
-        // Submissions mode: the current submitted snapshot of each workspace.
+        return $this->submission_items($cm, $context, $userid, $cangrade);
+    }
+
+    /**
+     * The submitted snapshots this viewer may see, newest first and bounded.
+     *
+     * @param \stdClass $cm The source course module.
+     * @param \context_module $context The source context.
+     * @param int $userid The viewer.
+     * @param bool $cangrade Whether the viewer may grade in the source activity.
+     * @return array The gallery items.
+     */
+    protected function submission_items($cm, $context, int $userid, bool $cangrade): array {
+        global $DB;
+
         $params = ['vimipadid' => $cm->instance];
         $where = ['w.vimipadid = :vimipadid', 'w.submittedsnapshotid IS NOT NULL'];
 
-        $groupmode = groups_get_activity_groupmode($cm);
-        $accessallgroups = has_capability('moodle/site:accessallgroups', $context, $userid);
-        $mygroups = groups_get_user_groups($cm->course, $userid)[0] ?? [];
-
-        if (!$cangrade) {
-            // Learners see only their own and their groups' submissions.
-            $mine = ['w.userid = :owner'];
-            $params['owner'] = $userid;
-            if (!empty($mygroups)) {
-                [$ingroup, $groupparams] = $DB->get_in_or_equal($mygroups, SQL_PARAMS_NAMED, 'og');
-                $mine[] = "w.groupid $ingroup";
-                $params += $groupparams;
-            }
-            $where[] = '(' . implode(' OR ', $mine) . ')';
-        } else if ($groupmode == SEPARATEGROUPS && !$accessallgroups) {
-            // Graders are restricted to their own separate groups.
-            if (empty($mygroups)) {
-                $where[] = 'w.groupid IS NULL';
-            } else {
-                [$ingroup, $groupparams] = $DB->get_in_or_equal($mygroups, SQL_PARAMS_NAMED, 'sg');
-                $where[] = "(w.groupid $ingroup OR w.groupid IS NULL)";
-                $params += $groupparams;
-            }
+        $clause = $this->visibility_clause($cm, $context, $userid, $cangrade);
+        if ($clause !== null) {
+            $where[] = $clause->sql;
+            $params += $clause->params;
         }
 
         $sql = "SELECT s.id, s.snapshotjson AS mapjson, w.userid, w.groupid
@@ -123,8 +118,61 @@ class vimipad_source implements source_interface {
         // Bounded and newest-first, then restored to chronological order.
         $rows = array_reverse($DB->get_records_sql($sql, $params, 0, self::MAX_ITEMS), true);
 
-        // Resolve all owner names up front: one query for users, and the group
-        // cache is filled once instead of per submitted workspace.
+        return $this->as_items($this->as_entries($rows));
+    }
+
+    /**
+     * The group/ownership restriction that applies to this viewer, if any.
+     *
+     * Learners see only their own and their groups' submissions; graders see
+     * everything unless separate groups restrict them to their own.
+     *
+     * @param \stdClass $cm The source course module.
+     * @param \context_module $context The source context.
+     * @param int $userid The viewer.
+     * @param bool $cangrade Whether the viewer may grade.
+     * @return object|null Object with sql and params, or null for no restriction.
+     */
+    protected function visibility_clause($cm, $context, int $userid, bool $cangrade) {
+        global $DB;
+
+        $mygroups = groups_get_user_groups($cm->course, $userid)[0] ?? [];
+
+        if (!$cangrade) {
+            $mine = ['w.userid = :owner'];
+            $params = ['owner' => $userid];
+            if (!empty($mygroups)) {
+                [$ingroup, $groupparams] = $DB->get_in_or_equal($mygroups, SQL_PARAMS_NAMED, 'og');
+                $mine[] = "w.groupid $ingroup";
+                $params += $groupparams;
+            }
+            return (object) ['sql' => '(' . implode(' OR ', $mine) . ')', 'params' => $params];
+        }
+
+        $separate = groups_get_activity_groupmode($cm) == SEPARATEGROUPS
+            && !has_capability('moodle/site:accessallgroups', $context, $userid);
+        if (!$separate) {
+            return null;
+        }
+        if (empty($mygroups)) {
+            return (object) ['sql' => 'w.groupid IS NULL', 'params' => []];
+        }
+        [$ingroup, $groupparams] = $DB->get_in_or_equal($mygroups, SQL_PARAMS_NAMED, 'sg');
+        return (object) [
+            'sql' => "(w.groupid $ingroup OR w.groupid IS NULL)",
+            'params' => $groupparams,
+        ];
+    }
+
+    /**
+     * Label each submitted snapshot with its owner, batching the name lookups.
+     *
+     * @param array $rows The snapshot rows.
+     * @return array The entries ready for as_items().
+     */
+    protected function as_entries(array $rows): array {
+        // One query for the users; the group cache is filled once rather than
+        // per submitted workspace.
         $names = \mod_vimigallery\local\comment_service::author_names(
             array_map(fn($r) => (int) $r->userid, $rows)
         );
@@ -133,21 +181,16 @@ class vimipad_source implements source_interface {
         $entries = [];
         foreach ($rows as $row) {
             $groupid = (int) $row->groupid;
-            if ($groupid > 0) {
-                if (!array_key_exists($groupid, $groupnames)) {
-                    $groupnames[$groupid] = (string) groups_get_group_name($groupid);
-                }
-                $author = $groupnames[$groupid];
-            } else {
-                $author = $names[(int) $row->userid] ?? '';
+            if ($groupid > 0 && !array_key_exists($groupid, $groupnames)) {
+                $groupnames[$groupid] = (string) groups_get_group_name($groupid);
             }
             $entries[] = (object) [
                 'mapjson' => $row->mapjson,
-                'authorname' => $author,
+                'authorname' => $groupid > 0 ? $groupnames[$groupid] : ($names[(int) $row->userid] ?? ''),
                 'sourceuserid' => $groupid > 0 ? null : (int) $row->userid,
             ];
         }
-        return $this->as_items($entries);
+        return $entries;
     }
 
     /**

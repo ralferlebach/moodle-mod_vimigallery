@@ -53,66 +53,80 @@ class datafield_source implements source_interface {
      * @return \stdClass[] The visible maps, in entry order.
      */
     public function get_items(?int $userid = null): array {
-        global $DB, $USER;
+        global $USER;
 
         $userid = $userid ?? (int) $USER->id;
 
-        // The datafield_vimipad plugin is an optional peer: without it there are no ViMi Pad
-        // fields to read, so degrade to empty instead of failing.
-        if (!\core_component::get_plugin_directory('datafield', 'vimipad')) {
+        $source = $this->resolve_source($userid);
+        if ($source === null) {
             return [];
         }
 
-        // Resolve the source database module; bail out quietly if it is gone.
+        return $this->build_items($this->fetch_records($source, $userid));
+    }
+
+    /**
+     * Resolve the source database module and field, applying every access check.
+     *
+     * Returns null whenever the source cannot or must not be read: the peer
+     * plugin is absent, the module is gone or invisible, the viewer lacks
+     * mod/data:viewentry, or the configured field does not belong to this
+     * database or is not a ViMi Pad field.
+     *
+     * @param int $userid The viewer.
+     * @return object|null Object with cm, context and data, or null.
+     */
+    protected function resolve_source(int $userid) {
+        global $DB;
+
+        // The datafield_vimipad plugin is an optional peer: without it there are
+        // no ViMi Pad fields to read, so degrade to empty instead of failing.
+        if (!\core_component::get_plugin_directory('datafield', 'vimipad')) {
+            return null;
+        }
+
         $cm = get_coursemodule_from_id('data', $this->cmid, 0, false, IGNORE_MISSING);
         if (!$cm) {
-            return [];
+            return null;
         }
         $modinfo = get_fast_modinfo($cm->course, $userid);
         if (!isset($modinfo->cms[$cm->id]) || !$modinfo->cms[$cm->id]->uservisible) {
-            return [];
+            return null;
         }
         $context = \context_module::instance($cm->id);
         if (!has_capability('mod/data:viewentry', $context, $userid)) {
-            return [];
+            return null;
         }
         // The field must belong to this database and be a ViMi Pad field.
         $field = $DB->get_record('data_fields', ['id' => $this->fieldid, 'dataid' => $cm->instance]);
         if (!$field || $field->type !== 'vimipad') {
-            return [];
+            return null;
         }
-        $data = $DB->get_record('data', ['id' => $cm->instance], '*', MUST_EXIST);
 
-        $params = ['dataid' => $cm->instance, 'fieldid' => $this->fieldid];
+        return (object) [
+            'cm' => $cm,
+            'context' => $context,
+            'data' => $DB->get_record('data', ['id' => $cm->instance], '*', MUST_EXIST),
+        ];
+    }
+
+    /**
+     * Fetch the visible entries for this viewer, newest first and bounded, then
+     * restored to chronological order.
+     *
+     * @param object $source The resolved source (cm, context, data).
+     * @param int $userid The viewer.
+     * @return array The entry records.
+     */
+    protected function fetch_records($source, int $userid): array {
+        global $DB;
+
+        $params = ['dataid' => $source->cm->instance, 'fieldid' => $this->fieldid];
         $where = ['r.dataid = :dataid'];
 
-        // Approval: hide unapproved entries unless the viewer may approve them or
-        // owns them.
-        if (!empty($data->approval) && !has_capability('mod/data:approve', $context, $userid)) {
-            $where[] = '(r.approved = 1 OR r.userid = :owner)';
-            $params['owner'] = $userid;
-        }
-
-        // Separate groups: restrict to the viewer's groups (plus group-0 entries)
-        // unless the viewer may access all groups.
-        $groupmode = groups_get_activity_groupmode($cm);
-        if (
-            $groupmode == SEPARATEGROUPS
-                && !has_capability('moodle/site:accessallgroups', $context, $userid)
-        ) {
-            $usergroups = groups_get_user_groups($cm->course, $userid);
-            $groupids = $usergroups[0] ?? [];
-            if (empty($groupids)) {
-                $where[] = 'r.groupid = 0';
-            } else {
-                [$ingroup, $groupparams] = $DB->get_in_or_equal(
-                    $groupids,
-                    SQL_PARAMS_NAMED,
-                    'grp'
-                );
-                $where[] = "(r.groupid = 0 OR r.groupid $ingroup)";
-                $params += $groupparams;
-            }
+        foreach ($this->visibility_clauses($source, $userid) as $clause) {
+            $where[] = $clause->sql;
+            $params += $clause->params;
         }
 
         $sql = "SELECT r.id, r.userid, c.content AS mapjson
@@ -120,34 +134,79 @@ class datafield_source implements source_interface {
                   JOIN {data_content} c ON c.recordid = r.id AND c.fieldid = :fieldid
                  WHERE " . implode(' AND ', $where) . "
               ORDER BY r.timecreated DESC, r.id DESC";
-        // Bounded and newest-first, then restored to chronological order: a
-        // database with thousands of entries must not become one gallery page.
-        $records = array_reverse($DB->get_records_sql($sql, $params, 0, self::MAX_ITEMS), true);
 
-        $items = [];
-        $sortorder = 0;
+        // Bounded: a database with thousands of entries must not become one page.
+        return array_reverse($DB->get_records_sql($sql, $params, 0, self::MAX_ITEMS), true);
+    }
+
+    /**
+     * The approval and group restrictions that apply to this viewer.
+     *
+     * @param object $source The resolved source (cm, context, data).
+     * @param int $userid The viewer.
+     * @return array List of objects with sql and params.
+     */
+    protected function visibility_clauses($source, int $userid): array {
+        global $DB;
+
+        $clauses = [];
+
+        // Approval: hide unapproved entries unless the viewer may approve them
+        // or owns them.
+        if (!empty($source->data->approval) && !has_capability('mod/data:approve', $source->context, $userid)) {
+            $clauses[] = (object) [
+                'sql' => '(r.approved = 1 OR r.userid = :owner)',
+                'params' => ['owner' => $userid],
+            ];
+        }
+
+        // Separate groups: restrict to the viewer's groups (plus group-0 entries)
+        // unless the viewer may access all groups.
+        $groupmode = groups_get_activity_groupmode($source->cm);
+        if ($groupmode != SEPARATEGROUPS || has_capability('moodle/site:accessallgroups', $source->context, $userid)) {
+            return $clauses;
+        }
+
+        $usergroups = groups_get_user_groups($source->cm->course, $userid);
+        $groupids = $usergroups[0] ?? [];
+        if (empty($groupids)) {
+            $clauses[] = (object) ['sql' => 'r.groupid = 0', 'params' => []];
+            return $clauses;
+        }
+
+        [$ingroup, $groupparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'grp');
+        $clauses[] = (object) [
+            'sql' => "(r.groupid = 0 OR r.groupid $ingroup)",
+            'params' => $groupparams,
+        ];
+        return $clauses;
+    }
+
+    /**
+     * Turn entry records into gallery items, skipping anything that is not a map.
+     *
+     * @param array $records The entry records.
+     * @return array The gallery items.
+     */
+    protected function build_items(array $records): array {
         // Author names in one query rather than one per record.
         $usercache = \mod_vimigallery\local\comment_service::author_names(
             array_map(fn($r) => (int) $r->userid, $records)
         );
-        foreach ($records as $record) {
-            if ($record->mapjson === null || trim($record->mapjson) === '') {
-                continue;
-            }
-            $decoded = json_decode($record->mapjson, true);
-            if (!is_array($decoded) || !isset($decoded['nodes'])) {
-                continue;
-            }
-            $profile = isset($decoded['profile']) && is_string($decoded['profile'])
-                ? $decoded['profile'] : 'conceptmap';
 
-            $author = $usercache[(int) $record->userid] ?? '';
+        $items = [];
+        $sortorder = 0;
+        foreach ($records as $record) {
+            $decoded = $this->decode_map($record->mapjson);
+            if ($decoded === null) {
+                continue;
+            }
 
             $item = new \stdClass();
             $item->id = 'df' . $record->id;
             $item->mapjson = $record->mapjson;
-            $item->profile = \core_text::substr($profile, 0, 40);
-            $item->authorname = \core_text::substr($author, 0, 255);
+            $item->profile = \core_text::substr($decoded, 0, 40);
+            $item->authorname = \core_text::substr($usercache[(int) $record->userid] ?? '', 0, 255);
             $item->sourceuserid = (int) $record->userid;
             $item->sortorder = $sortorder++;
             $item->visible = 1;
@@ -155,5 +214,23 @@ class datafield_source implements source_interface {
         }
 
         return $items;
+    }
+
+    /**
+     * The profile of a stored map, or null when the value is not a usable map.
+     *
+     * @param string|null $mapjson The stored field value.
+     * @return string|null The profile key, or null to skip this entry.
+     */
+    protected function decode_map($mapjson): ?string {
+        if ($mapjson === null || trim((string) $mapjson) === '') {
+            return null;
+        }
+        $decoded = json_decode($mapjson, true);
+        if (!is_array($decoded) || !isset($decoded['nodes'])) {
+            return null;
+        }
+        return isset($decoded['profile']) && is_string($decoded['profile'])
+            ? $decoded['profile'] : 'conceptmap';
     }
 }

@@ -36,7 +36,6 @@ class mod_vimigallery_mod_form extends moodleform_mod {
      * @return void
      */
     public function definition() {
-        global $COURSE;
         $mform = $this->_form;
 
         $mform->addElement('header', 'general', get_string('general', 'form'));
@@ -49,6 +48,24 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $this->standard_intro_elements();
 
         // Sources.
+        $this->add_source_elements($mform);
+
+        $this->add_display_elements($mform);
+
+        $this->standard_coursemodule_elements();
+        $this->add_action_buttons();
+    }
+
+
+    /**
+     * The source section: where the gallery takes its maps from.
+     *
+     * @param MoodleQuickForm $mform The form being built.
+     * @return void
+     */
+    protected function add_source_elements($mform) {
+        global $COURSE;
+
         $mform->addElement('header', 'sourceheader', get_string('sourceheader', 'mod_vimigallery'));
         $mform->setExpanded('sourceheader');
 
@@ -123,6 +140,15 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->hideIf('freshness', 'sourcetype', 'eq', 'upload');
 
         // Display options.
+    }
+
+    /**
+     * The display section: how the album is presented and what learners may do.
+     *
+     * @param MoodleQuickForm $mform The form being built.
+     * @return void
+     */
+    protected function add_display_elements($mform) {
         $mform->addElement('header', 'displayheader', get_string('displayheader', 'mod_vimigallery'));
         $mform->setExpanded('displayheader');
 
@@ -148,9 +174,6 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->addElement('advcheckbox', 'enablecompare', get_string('enablecompare', 'mod_vimigallery'));
         $mform->addHelpButton('enablecompare', 'enablecompare', 'mod_vimigallery');
         $mform->setDefault('enablecompare', 0);
-
-        $this->standard_coursemodule_elements();
-        $this->add_action_buttons();
     }
 
     /**
@@ -173,18 +196,31 @@ class mod_vimigallery_mod_form extends moodleform_mod {
             );
             $defaultvalues['vimijson'] = $draftitemid;
         }
-        if (!empty($this->current->sourcecmid) && !empty($this->current->sourcefieldid)) {
-            $defaultvalues['datafieldsource'] =
-                $this->current->sourcecmid . ':' . $this->current->sourcefieldid;
-        }
-        if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'qtype') {
-            $defaultvalues['qtypesource'] = $this->current->sourcecmid;
-        }
-        if (!empty($this->current->sourcecmid) && ($this->current->sourcetype ?? '') === 'vimipad') {
-            $defaultvalues['vimipadsource'] = $this->current->sourcecmid;
-        }
+        $this->preset_source_selectors($defaultvalues);
         $defaultvalues['completioncommentsenabled'] =
             !empty($defaultvalues['completioncommentsmin']) ? 1 : 0;
+    }
+
+    /**
+     * Preselect the source selector that matches the stored source type.
+     *
+     * @param array $defaultvalues The form defaults, modified in place.
+     * @return void
+     */
+    protected function preset_source_selectors(array &$defaultvalues) {
+        if (empty($this->current->sourcecmid)) {
+            return;
+        }
+        $cmid = $this->current->sourcecmid;
+        $type = $this->current->sourcetype ?? '';
+
+        if (!empty($this->current->sourcefieldid)) {
+            $defaultvalues['datafieldsource'] = $cmid . ':' . $this->current->sourcefieldid;
+        }
+        $selectors = ['qtype' => 'qtypesource', 'vimipad' => 'vimipadsource'];
+        if (isset($selectors[$type])) {
+            $defaultvalues[$selectors[$type]] = $cmid;
+        }
     }
 
     /**

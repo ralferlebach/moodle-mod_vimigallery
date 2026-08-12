@@ -82,30 +82,45 @@ function vimigallery_make_source($gallery) {
  * @return void
  */
 function vimigallery_prepare_source_fields($data) {
-    if (empty($data->sourcetype)) {
-        $data->sourcetype = 'upload';
-    }
-    if (empty($data->freshness)) {
-        $data->freshness = 'live';
-    }
-    if (empty($data->sourcemode)) {
-        $data->sourcemode = 'reference';
-    }
+    $data->sourcetype = empty($data->sourcetype) ? 'upload' : $data->sourcetype;
+    $data->freshness = empty($data->freshness) ? 'live' : $data->freshness;
+    $data->sourcemode = empty($data->sourcemode) ? 'reference' : $data->sourcemode;
+
+    vimigallery_decode_source_selection($data);
+    vimigallery_validate_source_selection($data);
+}
+
+/**
+ * Turn the form's per-type source selector into sourcecmid/sourcefieldid.
+ *
+ * @param object $data The submitted module data.
+ * @return void
+ */
+function vimigallery_decode_source_selection($data) {
     $data->sourcecmid = 0;
     $data->sourcefieldid = 0;
-    if ($data->sourcetype === 'datafield' && !empty($data->datafieldsource)) {
-        $parts = explode(':', $data->datafieldsource);
-        if (count($parts) === 2) {
-            $data->sourcecmid = (int) $parts[0];
-            $data->sourcefieldid = (int) $parts[1];
-        }
-    } else if ($data->sourcetype === 'qtype' && !empty($data->qtypesource)) {
-        $data->sourcecmid = (int) $data->qtypesource;
-    } else if ($data->sourcetype === 'vimipad' && !empty($data->vimipadsource)) {
-        $data->sourcecmid = (int) $data->vimipadsource;
+
+    $selectors = [
+        'datafield' => 'datafieldsource',
+        'qtype' => 'qtypesource',
+        'vimipad' => 'vimipadsource',
+    ];
+    $field = $selectors[$data->sourcetype] ?? null;
+    if ($field === null || empty($data->$field)) {
+        return;
     }
 
-    vimigallery_validate_source_selection($data);
+    if ($data->sourcetype !== 'datafield') {
+        $data->sourcecmid = (int) $data->$field;
+        return;
+    }
+
+    // The database selector carries "cmid:fieldid".
+    $parts = explode(':', $data->$field);
+    if (count($parts) === 2) {
+        $data->sourcecmid = (int) $parts[0];
+        $data->sourcefieldid = (int) $parts[1];
+    }
 }
 
 /**
@@ -122,43 +137,46 @@ function vimigallery_prepare_source_fields($data) {
  * @return void
  */
 function vimigallery_validate_source_selection($data) {
-    global $DB;
-
     if ($data->sourcetype === 'upload' || empty($data->sourcecmid)) {
         return;
     }
+
+    if (!vimigallery_source_selection_is_valid($data)) {
+        $data->sourcetype = 'upload';
+        $data->sourcecmid = 0;
+        $data->sourcefieldid = 0;
+    }
+}
+
+/**
+ * Whether the chosen source module (and field) checks out for this gallery.
+ *
+ * @param object $data The submitted module data.
+ * @return bool True when the selection may be used.
+ */
+function vimigallery_source_selection_is_valid($data) {
+    global $DB;
 
     $expected = [
         'datafield' => 'data',
         'qtype' => 'quiz',
         'vimipad' => 'vimipad',
     ];
-    $reset = function () use ($data) {
-        $data->sourcetype = 'upload';
-        $data->sourcecmid = 0;
-        $data->sourcefieldid = 0;
-    };
-
     if (!isset($expected[$data->sourcetype])) {
-        $reset();
-        return;
+        return false;
     }
 
     $cm = get_coursemodule_from_id($expected[$data->sourcetype], (int) $data->sourcecmid, 0, false, IGNORE_MISSING);
     if (!$cm || (int) $cm->course !== (int) $data->course) {
-        $reset();
-        return;
+        return false;
     }
-
     if ($data->sourcetype !== 'datafield') {
-        return;
+        return true;
     }
 
     // The field must belong to this database activity and be a ViMi Pad field.
     $field = $DB->get_record('data_fields', ['id' => (int) $data->sourcefieldid], 'id, dataid, type');
-    if (!$field || (int) $field->dataid !== (int) $cm->instance || $field->type !== 'vimipad') {
-        $reset();
-    }
+    return $field && (int) $field->dataid === (int) $cm->instance && $field->type === 'vimipad';
 }
 
 /**
@@ -271,50 +289,7 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
         ['galleryid' => $galleryid]
     );
 
-    $entries = [];
-    $source = vimigallery_make_source($gallery);
-    if ($source !== null) {
-        // Activity sources: materialise for static/snapshot; live keeps no items.
-        if ($gallery->freshness !== 'live') {
-            foreach ($source->get_items() as $sourceitem) {
-                $entries[] = [
-                    'sourcetype' => $gallery->sourcetype,
-                    'profile' => $sourceitem->profile,
-                    'mapjson' => $sourceitem->mapjson,
-                    'authorname' => $sourceitem->authorname,
-                    'sourceuserid' => $sourceitem->sourceuserid ?? null,
-                ];
-            }
-        }
-    } else {
-        // Upload source (default): one frozen item per stored JSON file.
-        $fs = get_file_storage();
-        $files = $fs->get_area_files($context->id, 'mod_vimigallery', 'source', 0, 'filename', false);
-        foreach ($files as $file) {
-            if ($file->get_filesize() > \mod_vimipad\api\value::MAX_BYTES) {
-                continue;
-            }
-            $content = $file->get_content();
-            // Uploaded files are teacher-supplied but still arbitrary input, so
-            // they must satisfy the public ViMi Pad map policy before they are
-            // materialised and later handed to the editor or the scorer.
-            if (!\mod_vimipad\api\value::is_valid($content)) {
-                continue;
-            }
-            $decoded = json_decode($content, true);
-            $profile = isset($decoded['profile']) && is_string($decoded['profile'])
-                ? $decoded['profile'] : 'conceptmap';
-            $author = isset($decoded['author']) && is_string($decoded['author'])
-                ? $decoded['author'] : '';
-            $entries[] = [
-                'sourcetype' => 'upload',
-                'profile' => core_text::substr($profile, 0, 40),
-                'mapjson' => $content,
-                'authorname' => core_text::substr($author, 0, 255),
-                'sourceuserid' => null,
-            ];
-        }
-    }
+    $entries = vimigallery_collect_entries($gallery, $context);
 
     // Everything above only reads. The destructive swap happens in one
     // transaction, so a failure while replacing the items rolls back to the
@@ -338,6 +313,81 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
     }
     vimigallery_relink_comments($galleryid, $oldcomments);
     $transaction->allow_commit();
+}
+
+/**
+ * Collect the map entries a rebuild should materialise, without touching the
+ * database. Activity sources are read through their adapter (live galleries
+ * keep nothing); an upload gallery reads its stored JSON files, each validated
+ * against the public ViMi Pad map policy.
+ *
+ * @param stdClass $gallery The gallery instance.
+ * @param context_module $context The gallery context.
+ * @return array The entries to insert.
+ */
+function vimigallery_collect_entries($gallery, context_module $context) {
+    $entries = [];
+    $source = vimigallery_make_source($gallery);
+    if ($source !== null) {
+        // Activity sources: materialise for static/snapshot; live keeps no items.
+        if ($gallery->freshness !== 'live') {
+            foreach ($source->get_items() as $sourceitem) {
+                $entries[] = [
+                    'sourcetype' => $gallery->sourcetype,
+                    'profile' => $sourceitem->profile,
+                    'mapjson' => $sourceitem->mapjson,
+                    'authorname' => $sourceitem->authorname,
+                    'sourceuserid' => $sourceitem->sourceuserid ?? null,
+                ];
+            }
+        }
+    } else {
+        $entries = vimigallery_upload_entries($context);
+    }
+    return $entries;
+}
+
+/**
+ * Read the gallery's uploaded JSON files as map entries.
+ *
+ * Uploads are teacher-supplied but still arbitrary input, so each file is
+ * bounded in size and validated against the public ViMi Pad map policy before it
+ * is materialised and later handed to the editor or the scorer.
+ *
+ * @param context_module $context The gallery context.
+ * @return array The entries to insert.
+ */
+function vimigallery_upload_entries(context_module $context) {
+    $entries = [];
+    // Upload source (default): one frozen item per stored JSON file.
+    $fs = get_file_storage();
+    $files = $fs->get_area_files($context->id, 'mod_vimigallery', 'source', 0, 'filename', false);
+    foreach ($files as $file) {
+        if ($file->get_filesize() > \mod_vimipad\api\value::MAX_BYTES) {
+            continue;
+        }
+        $content = $file->get_content();
+        // Uploaded files are teacher-supplied but still arbitrary input, so
+        // they must satisfy the public ViMi Pad map policy before they are
+        // materialised and later handed to the editor or the scorer.
+        if (!\mod_vimipad\api\value::is_valid($content)) {
+            continue;
+        }
+        $decoded = json_decode($content, true);
+        $profile = isset($decoded['profile']) && is_string($decoded['profile'])
+            ? $decoded['profile'] : 'conceptmap';
+        $author = isset($decoded['author']) && is_string($decoded['author'])
+            ? $decoded['author'] : '';
+        $entries[] = [
+            'sourcetype' => 'upload',
+            'profile' => core_text::substr($profile, 0, 40),
+            'mapjson' => $content,
+            'authorname' => core_text::substr($author, 0, 255),
+            'sourceuserid' => null,
+        ];
+    }
+
+    return $entries;
 }
 
 /**

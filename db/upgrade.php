@@ -25,6 +25,12 @@
 /**
  * Execute mod_vimigallery upgrade from the given old version.
  *
+ * The shape of a Moodle upgrade function is prescribed: a sequence of
+ * "if ($oldversion < N) { ... upgrade_mod_savepoint(N) }" blocks that must stay
+ * in version order and must never be reordered or merged. It therefore grows by
+ * one branch per release, and is excluded from the phpmd size rules in the
+ * makefile rather than being split.
+ *
  * @param int $oldversion The version we are upgrading from.
  * @return bool Always true on success.
  */

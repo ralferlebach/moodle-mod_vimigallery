@@ -63,7 +63,7 @@ class qtype_source implements source_interface {
      * @return \stdClass[] The visible maps, in question order.
      */
     public function get_items(?int $userid = null): array {
-        global $DB, $USER;
+        global $USER;
 
         $userid = $userid ?? (int) $USER->id;
 
@@ -93,7 +93,19 @@ class qtype_source implements source_interface {
             return [];
         }
 
-        $questionids = $this->quiz_vimipad_questionids($cm->instance);
+        return $this->reference_items($cm->instance);
+    }
+
+    /**
+     * The reference maps of this quiz's ViMi Pad questions, in slot order.
+     *
+     * @param int $quizid The quiz instance id.
+     * @return array The gallery items.
+     */
+    protected function reference_items(int $quizid): array {
+        global $DB;
+
+        $questionids = $this->quiz_vimipad_questionids($quizid);
         if (empty($questionids)) {
             return [];
         }
@@ -110,19 +122,11 @@ class qtype_source implements source_interface {
         $items = [];
         $sortorder = 0;
         foreach ($questionids as $questionid) {
-            if (!isset($references[$questionid])) {
+            $mapjson = $references[$questionid]->referencemap ?? null;
+            $profile = $this->map_profile($mapjson);
+            if ($profile === null) {
                 continue;
             }
-            $mapjson = $references[$questionid]->referencemap;
-            if ($mapjson === null || trim((string) $mapjson) === '') {
-                continue;
-            }
-            $decoded = json_decode($mapjson, true);
-            if (!is_array($decoded) || !isset($decoded['nodes'])) {
-                continue;
-            }
-            $profile = isset($decoded['profile']) && is_string($decoded['profile'])
-                ? $decoded['profile'] : 'conceptmap';
 
             $item = new \stdClass();
             $item->id = 'qt' . $questionid;
@@ -138,6 +142,24 @@ class qtype_source implements source_interface {
         }
 
         return $items;
+    }
+
+    /**
+     * The profile of a stored map, or null when the value is not a usable map.
+     *
+     * @param string|null $mapjson The stored map value.
+     * @return string|null The profile key, or null to skip.
+     */
+    protected function map_profile($mapjson): ?string {
+        if ($mapjson === null || trim((string) $mapjson) === '') {
+            return null;
+        }
+        $decoded = json_decode($mapjson, true);
+        if (!is_array($decoded) || !isset($decoded['nodes'])) {
+            return null;
+        }
+        return isset($decoded['profile']) && is_string($decoded['profile'])
+            ? $decoded['profile'] : 'conceptmap';
     }
 
     /**
@@ -160,26 +182,9 @@ class qtype_source implements source_interface {
             return [];
         }
 
-        $canviewall = has_capability('mod/quiz:viewreports', $context, $userid)
-            || has_capability('mod/quiz:grade', $context, $userid);
-
-        $params = ['quizid' => $cm->instance, 'state' => 'finished'];
-        $where = ['quiz = :quizid', 'state = :state', 'preview = 0'];
-
-        if (!$canviewall) {
-            $where[] = 'userid = :owner';
-            $params['owner'] = $userid;
-        } else if (
-            groups_get_activity_groupmode($cm) == SEPARATEGROUPS
-                && !has_capability('moodle/site:accessallgroups', $context, $userid)
-        ) {
-            $allowed = $this->group_peer_userids($cm->course, $userid);
-            if (empty($allowed)) {
-                return [];
-            }
-            [$insql, $inparams] = $DB->get_in_or_equal($allowed, SQL_PARAMS_NAMED, 'u');
-            $where[] = "userid $insql";
-            $params += $inparams;
+        $filter = $this->attempt_filter($cm, $context, $userid);
+        if ($filter === null) {
+            return [];
         }
 
         // Newest first, bounded: each attempt costs a question-usage load, which
@@ -187,8 +192,8 @@ class qtype_source implements source_interface {
         // unusable. The slice is reversed afterwards to restore chronology.
         $attempts = $DB->get_records_select(
             'quiz_attempts',
-            implode(' AND ', $where),
-            $params,
+            implode(' AND ', $filter->where),
+            $filter->params,
             'timefinish DESC, id DESC',
             'id, userid, uniqueid',
             0,
@@ -228,6 +233,50 @@ class qtype_source implements source_interface {
         return $this->normalise_entries($entries);
     }
 
+    /**
+     * The attempt filter that applies to this viewer.
+     *
+     * Learners see only their own finished attempts; users who may view reports
+     * or grade see everything, unless separate groups restrict them to their own
+     * groups' members. Returns null when the viewer may see nothing at all.
+     *
+     * @param \stdClass $cm The quiz course module.
+     * @param \context_module $context The quiz context.
+     * @param int $userid The viewer.
+     * @return object|null Object with where and params, or null.
+     */
+    protected function attempt_filter($cm, $context, int $userid) {
+        global $DB;
+
+        $filter = (object) [
+            'where' => ['quiz = :quizid', 'state = :state', 'preview = 0'],
+            'params' => ['quizid' => $cm->instance, 'state' => 'finished'],
+        ];
+
+        $canviewall = has_capability('mod/quiz:viewreports', $context, $userid)
+            || has_capability('mod/quiz:grade', $context, $userid);
+
+        if (!$canviewall) {
+            $filter->where[] = 'userid = :owner';
+            $filter->params['owner'] = $userid;
+            return $filter;
+        }
+
+        $separate = groups_get_activity_groupmode($cm) == SEPARATEGROUPS
+            && !has_capability('moodle/site:accessallgroups', $context, $userid);
+        if (!$separate) {
+            return $filter;
+        }
+
+        $allowed = $this->group_peer_userids($cm->course, $userid);
+        if (empty($allowed)) {
+            return null;
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($allowed, SQL_PARAMS_NAMED, 'u');
+        $filter->where[] = "userid $insql";
+        $filter->params += $inparams;
+        return $filter;
+    }
     /**
      * The user ids sharing at least one group with the viewer.
      *

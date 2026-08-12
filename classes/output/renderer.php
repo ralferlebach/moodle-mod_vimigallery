@@ -60,72 +60,10 @@ class renderer extends plugin_renderer_base {
         $slides = [];
         $index = 0;
         foreach ($items as $item) {
-            $baseid = $rootid . '_i' . $item->id;
-            $inputid = $baseid . '_value';
-            $containerid = $baseid . '_editor';
-
-            // The form config only depends on the profile, so collect it once per
-            // profile and pass the map via a JSON script element (not js_call_amd,
-            // which caps argument length).
             if (!isset($formconfigs[$item->profile])) {
                 $formconfigs[$item->profile] = \mod_vimipad\profile\profiles::form_config($item->profile);
             }
-
-            // Only the first map travels in the page. The rest are fetched as the
-            // viewer reaches them, so an album of a hundred maps does not put a
-            // hundred serialised documents into one HTML response.
-            $inline = ($index === 0);
-            $hidden = $inline
-                ? html_writer::empty_tag('input', [
-                    'type' => 'hidden',
-                    'id' => $inputid,
-                    'value' => (string) $item->mapjson,
-                ])
-                : html_writer::empty_tag('input', [
-                    'type' => 'hidden',
-                    'id' => $inputid,
-                    'value' => '',
-                ]);
-            // Dynamic height: grows with the viewport but never below the floor.
-            $containerattrs = [
-                'id' => $containerid,
-                'class' => 'vimigallery-editor',
-                'style' => 'min-height:480px;height:60vh;',
-                'data-input' => $inputid,
-                'data-profile' => $item->profile,
-            ];
-            if (!$inline) {
-                // The viewer fetches this item's map before mounting it.
-                $containerattrs['data-itemid'] = (string) $item->id;
-            }
-            $container = html_writer::tag('div', '', $containerattrs);
-
-            $slidebody = '';
-            if ($gallery->show_authors() && $item->authorname !== '') {
-                $slidebody .= html_writer::div(
-                    s($item->authorname),
-                    'vimigallery-author font-weight-bold mb-1'
-                );
-            }
-            $slidebody .= $hidden . $container;
-
-            // Comments belong to materialised items (numeric ids); live sources
-            // have synthetic ids and are not commentable.
-            if ($gallery->allow_comments() && is_numeric($item->id)) {
-                $slidebody .= $this->render_comments(
-                    $gallery,
-                    (int) $item->id,
-                    $allcomments[(int) $item->id] ?? []
-                );
-            }
-
-            // Only the first slide is visible initially; the rest are hidden and
-            // mounted lazily as the learner swipes to them.
-            $slideattrs = ['class' => 'vimigallery-slide', 'data-index' => $index];
-            if ($index !== 0) {
-                $slideattrs['hidden'] = 'hidden';
-            }
-            $slides[] = html_writer::tag('div', $slidebody, $slideattrs);
+            $slides[] = $this->render_slide($gallery, $item, $index, $rootid, $allcomments);
             $index++;
         }
 
@@ -137,30 +75,7 @@ class renderer extends plugin_renderer_base {
 
         $track = html_writer::div(implode('', $slides), 'vimigallery-track');
 
-        $controls = '';
-        if ($multiple) {
-            $prev = html_writer::tag('button', '&#8249;', [
-                'type' => 'button',
-                'class' => 'btn btn-outline-secondary vimigallery-prev',
-                'data-vimigallery-prev' => '1',
-                'aria-label' => get_string('previous'),
-            ]);
-            $next = html_writer::tag('button', '&#8250;', [
-                'type' => 'button',
-                'class' => 'btn btn-outline-secondary vimigallery-next',
-                'data-vimigallery-next' => '1',
-                'aria-label' => get_string('next'),
-            ]);
-            $counter = html_writer::div(
-                html_writer::span('1', '', ['data-vimigallery-current' => '1'])
-                    . ' / ' . count($items),
-                'vimigallery-counter mx-2'
-            );
-            $controls = html_writer::div(
-                $prev . $counter . $next,
-                'vimigallery-controls d-flex align-items-center justify-content-center mt-2'
-            );
-        }
+        $controls = $multiple ? $this->render_controls(count($items)) : '';
 
         $this->page->requires->js_call_amd('mod_vimigallery/viewer', 'init', [
             $rootid,
@@ -173,6 +88,91 @@ class renderer extends plugin_renderer_base {
             $configscript . $track . $controls,
             'vimigallery',
             ['id' => $rootid, 'data-vimigallery' => '1']
+        );
+    }
+
+    /**
+     * Render one slide: the author line, the editor host and the comments.
+     *
+     * Only the first slide carries its map inline; the rest carry the item id the
+     * viewer fetches them with, so a large album stays light.
+     *
+     * @param gallery $gallery The gallery renderable.
+     * @param object $item The item to render.
+     * @param int $index The zero-based slide index.
+     * @param string $rootid The gallery root element id.
+     * @param array $allcomments Comments for the whole gallery, keyed by item id.
+     * @return string The slide HTML.
+     */
+    protected function render_slide(gallery $gallery, $item, int $index, string $rootid, array $allcomments): string {
+        $baseid = $rootid . '_i' . $item->id;
+        $inputid = $baseid . '_value';
+        $inline = ($index === 0);
+
+        $hidden = html_writer::empty_tag('input', [
+            'type' => 'hidden',
+            'id' => $inputid,
+            'value' => $inline ? (string) $item->mapjson : '',
+        ]);
+
+        // Dynamic height: grows with the viewport but never below the floor.
+        $containerattrs = [
+            'id' => $baseid . '_editor',
+            'class' => 'vimigallery-editor',
+            'style' => 'min-height:480px;height:60vh;',
+            'data-input' => $inputid,
+            'data-profile' => $item->profile,
+        ];
+        if (!$inline) {
+            $containerattrs['data-itemid'] = (string) $item->id;
+        }
+
+        $slidebody = '';
+        if ($gallery->show_authors() && $item->authorname !== '') {
+            $slidebody .= html_writer::div(s($item->authorname), 'vimigallery-author font-weight-bold mb-1');
+        }
+        $slidebody .= $hidden . html_writer::tag('div', '', $containerattrs);
+
+        // Comments belong to materialised items (numeric ids); live sources have
+        // synthetic ids and are not commentable.
+        if ($gallery->allow_comments() && is_numeric($item->id)) {
+            $slidebody .= $this->render_comments($gallery, (int) $item->id, $allcomments[(int) $item->id] ?? []);
+        }
+
+        // Only the first slide is visible initially; the rest are mounted lazily.
+        $slideattrs = ['class' => 'vimigallery-slide', 'data-index' => $index];
+        if ($index !== 0) {
+            $slideattrs['hidden'] = 'hidden';
+        }
+        return html_writer::tag('div', $slidebody, $slideattrs);
+    }
+
+    /**
+     * Render the previous/next controls and the slide counter.
+     *
+     * @param int $total The number of slides.
+     * @return string The controls HTML.
+     */
+    protected function render_controls(int $total): string {
+        $prev = html_writer::tag('button', '&#8249;', [
+            'type' => 'button',
+            'class' => 'btn btn-outline-secondary vimigallery-prev',
+            'data-vimigallery-prev' => '1',
+            'aria-label' => get_string('previous'),
+        ]);
+        $next = html_writer::tag('button', '&#8250;', [
+            'type' => 'button',
+            'class' => 'btn btn-outline-secondary vimigallery-next',
+            'data-vimigallery-next' => '1',
+            'aria-label' => get_string('next'),
+        ]);
+        $counter = html_writer::div(
+            html_writer::span('1', '', ['data-vimigallery-current' => '1']) . ' / ' . $total,
+            'vimigallery-counter mx-2'
+        );
+        return html_writer::div(
+            $prev . $counter . $next,
+            'vimigallery-controls d-flex align-items-center justify-content-center mt-2'
         );
     }
 
@@ -248,21 +248,7 @@ class renderer extends plugin_renderer_base {
         $leftid = $compare->get_left() ? (string) $compare->get_left()->id : '';
         $rightid = $compare->get_right() ? (string) $compare->get_right()->id : '';
 
-        $url = new \moodle_url('/mod/vimigallery/compare.php', ['id' => $compare->cmid()]);
-        $selectors = html_writer::start_tag('form', [
-            'method' => 'get', 'action' => $url->out_omit_querystring(), 'class' => 'form-inline mb-3',
-        ]);
-        $selectors .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $compare->cmid()]);
-        $selectors .= html_writer::label(get_string('compareleft', 'mod_vimigallery'), 'cmpleft', true, ['class' => 'mr-1']);
-        $selectors .= html_writer::select($options, 'left', $leftid, false, ['id' => 'cmpleft', 'class' => 'mr-3']);
-        $selectors .= html_writer::label(get_string('compareright', 'mod_vimigallery'), 'cmpright', true, ['class' => 'mr-1']);
-        $selectors .= html_writer::select($options, 'right', $rightid, false, ['id' => 'cmpright', 'class' => 'mr-3']);
-        $selectors .= html_writer::tag(
-            'button',
-            get_string('compare', 'mod_vimigallery'),
-            ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']
-        );
-        $selectors .= html_writer::end_tag('form');
+        $selectors = $this->render_compare_selectors($compare, $options, $leftid, $rightid);
 
         // Nothing selected yet: just the selectors.
         if ($compare->get_left() === null || $compare->get_right() === null) {
@@ -295,6 +281,60 @@ class renderer extends plugin_renderer_base {
         );
 
         // Two read-only panes.
+        [$formconfigs, $grid] = $this->render_compare_panes($compare, $rootid);
+
+        $configscript = html_writer::tag(
+            'script',
+            json_encode($formconfigs, JSON_HEX_TAG | JSON_HEX_AMP),
+            ['type' => 'application/json', 'id' => $rootid . '_formconfigs']
+        );
+
+        $this->page->requires->js_call_amd('mod_vimigallery/compare', 'init', [$rootid]);
+
+        return html_writer::div(
+            $selectors . $simhtml . $toggle . $configscript . $grid,
+            'vimigallery-compare',
+            ['id' => $rootid, 'data-vimigallery-compare' => '1']
+        );
+    }
+
+    /**
+     * Render the two map selectors as a plain GET form.
+     *
+     * @param compare $compare The comparison renderable.
+     * @param array $options The selectable maps, keyed by item id.
+     * @param string $leftid The currently chosen left item id.
+     * @param string $rightid The currently chosen right item id.
+     * @return string The form HTML.
+     */
+    protected function render_compare_selectors($compare, array $options, string $leftid, string $rightid): string {
+        $url = new \moodle_url('/mod/vimigallery/compare.php', ['id' => $compare->cmid()]);
+        $selectors = html_writer::start_tag('form', [
+            'method' => 'get', 'action' => $url->out_omit_querystring(), 'class' => 'form-inline mb-3',
+        ]);
+        $selectors .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $compare->cmid()]);
+        $selectors .= html_writer::label(get_string('compareleft', 'mod_vimigallery'), 'cmpleft', true, ['class' => 'mr-1']);
+        $selectors .= html_writer::select($options, 'left', $leftid, false, ['id' => 'cmpleft', 'class' => 'mr-3']);
+        $selectors .= html_writer::label(get_string('compareright', 'mod_vimigallery'), 'cmpright', true, ['class' => 'mr-1']);
+        $selectors .= html_writer::select($options, 'right', $rightid, false, ['id' => 'cmpright', 'class' => 'mr-3']);
+        $selectors .= html_writer::tag(
+            'button',
+            get_string('compare', 'mod_vimigallery'),
+            ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']
+        );
+        $selectors .= html_writer::end_tag('form');
+
+        return $selectors;
+    }
+
+    /**
+     * Render the two read-only map panes and collect their profile form configs.
+     *
+     * @param compare $compare The comparison renderable.
+     * @param string $rootid The comparison root element id.
+     * @return array [form configs keyed by profile, the grid HTML]
+     */
+    protected function render_compare_panes($compare, string $rootid): array {
         $formconfigs = [];
         $panes = '';
         foreach (['left' => $compare->get_left(), 'right' => $compare->get_right()] as $side => $item) {
@@ -321,19 +361,7 @@ class renderer extends plugin_renderer_base {
         }
         $grid = html_writer::div($panes, 'row vimigallery-compare-grid');
 
-        $configscript = html_writer::tag(
-            'script',
-            json_encode($formconfigs, JSON_HEX_TAG | JSON_HEX_AMP),
-            ['type' => 'application/json', 'id' => $rootid . '_formconfigs']
-        );
-
-        $this->page->requires->js_call_amd('mod_vimigallery/compare', 'init', [$rootid]);
-
-        return html_writer::div(
-            $selectors . $simhtml . $toggle . $configscript . $grid,
-            'vimigallery-compare',
-            ['id' => $rootid, 'data-vimigallery-compare' => '1']
-        );
+        return [$formconfigs, $grid];
     }
 
     /**
