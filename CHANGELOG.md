@@ -1,32 +1,50 @@
 # Changelog — mod_vimigallery
 
-## 0.2.1 - 2026-08-11
+## 0.3.7 - 2026-08-12
+
+### Added
+- Group-map provenance. A materialised group submission is joint work, so one
+  sourceuserid cannot describe it and the privacy API could not find a group
+  member's contribution at all. Items now record every contributor in
+  vimigallery_item_user, filled from the parent plugin's public submissions API.
 
 ### Changed
-- The showtabs setting is now functional: it drives mod_vimipad's new read-only
-  Map/List toggle (showViewToggle). Dependency raised to mod_vimipad 2026080810
-  (0.9.10).
+- A deletion request from a group member removes only that person's link. The map
+  and its group label stay, because the map also holds other people's work and
+  the group name is not a person. This mirrors how mod_vimipad anonymises shared
+  contributions rather than deleting them. An individual map remains this
+  learner's own work and its copy is still deleted.
+- Contributors travel through backup and restore with user mapping, and are
+  cleared on rebuild and on deleting the activity.
 
-## 0.2.0 - 2026-08-11
+## 0.3.6 - 2026-08-12
 
-### Added
-- Album/swipe: multiple maps are shown one at a time with previous/next controls,
-  a counter, keyboard (arrow keys) and touch-swipe navigation. The active map and
-  its immediate neighbours are mounted lazily. A single map shows no controls.
-- Per-profile form configs are delivered via a JSON script element (deduplicated),
-  keeping js_call_amd arguments small. Added `styles.css` for the album layout.
+### Fixed
+- Added the missing CamelCaseNamespace exclusion to phpmd.xml. The plugin now
+  reports zero findings.
 
-## 0.1.0 - 2026-08-11
+### Changed
+- The AMD target can refresh the browserslist database with
+  BROWSERSLIST_UPDATE=1 (off by default).
 
-### Added
-- Initial skeleton of the ViMi Gallery activity module (depends on mod_vimipad).
-- `displaymode` setting: `page` (link and description, like mod_page) or `course`
-  (embedded on the course page with no link, like mod_label).
-- Uploaded JSON maps are stored and shown read-only through mod_vimipad's
-  embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
-  minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
-  and takes effect once mod_vimipad exposes a read-only view toggle).
-- Backup/restore and a null privacy provider (no personal data yet).
+## 0.3.5 - 2026-08-12
+
+### Fixed
+- Provenance was lost for quiz submissions: normalise_entries() dropped
+  sourceuserid, so a materialised learner answer reached the item table with no
+  owner and the privacy API could not find, export or delete it.
+- Live source ids were positional (qs0, vp0, ...). A submission arriving between
+  the initial render and a lazy fetch shifted every later id, so a slide could
+  show one learner's name beside another learner's map. Ids now derive from the
+  origin record (attempt and slot, or snapshot).
+- Comments were re-linked across a rebuild by content hash, which cannot tell
+  identical maps apart - empty maps, a shared template, identical answers - and
+  could move a comment onto someone else's map. Items now carry a stable
+  sourcekey and are matched on that; the hash remains an integrity marker.
+- Posting a comment required only mod/vimigallery:comment, and the service did
+  not check visibility. It now requires view as well, and refuses hidden items.
+- README described the 0.1.0 skeleton; it now describes the plugin as it is.
+- Changelog consolidated into descending order with the duplicate 0.2.5 merged.
 
 ## 0.3.4 - 2026-08-12
 
@@ -208,6 +226,7 @@ First beta. Maturity raised from ALPHA to BETA.
   failing. This plugins own CI only installs mod_vimipad as a dependency, so the
   qtype integration tests could not create a vimipad question there. The tests run
   fully in an environment where the peer plugins are present.
+
 ## 0.2.8 - 2026-08-11
 
 ### Added
@@ -215,12 +234,14 @@ First beta. Maturity raised from ALPHA to BETA.
   vimipad questions of a Quiz. Visibility follows the quiz: a learner sees only
   their own finished attempts; a viewer with report/grade access sees everyone, and
   under separate groups only their own groups. Completes both qtype modes.
+
 ## 0.2.7 - 2026-08-11
 
 ### Added
 - Drag-and-drop reordering on the arrange page (core/sortable_list) persisted via a
   new mod_vimigallery_reorder web service. The up/down links remain as an accessible,
   no-JavaScript fallback. New curation::set_order operation.
+
 ## 0.2.6 - 2026-08-11
 
 ### Added
@@ -230,6 +251,7 @@ First beta. Maturity raised from ALPHA to BETA.
   and are not curated. A link to the page appears on the gallery for managers.
 - New curation service (`\mod_vimigallery\local\curation`) with move, visibility
   and normalise operations.
+
 ## 0.2.5 - 2026-08-11
 
 ### Added
@@ -241,9 +263,6 @@ First beta. Maturity raised from ALPHA to BETA.
   step; qtype currently returns reference only).
 - All three source adapters (datafield, qtype, vimipad) are covered by the shared
   factory and normalised source interface.
-
-## 0.2.5 - 2026-08-11
-
 ### Added
 - mod_vimipad source: a gallery can draw from a ViMi Pad activity, showing either
   its model solution (reference mode, graders only live) or the submitted maps
@@ -251,6 +270,7 @@ First beta. Maturity raised from ALPHA to BETA.
   only their own and their groups; a grader sees all, subject to separate groups.
 - Completes the three activity source adapters (datafield, qtype, vimipad) behind
   the shared source factory. The source mode setting now also offers submissions.
+
 ## 0.2.4 - 2026-08-11
 
 ### Added
@@ -279,4 +299,30 @@ First beta. Maturity raised from ALPHA to BETA.
   activity is saved. Default is live.
 - Schema: source columns added to the vimigallery table with an upgrade step.
 
+## 0.2.1 - 2026-08-11
 
+### Changed
+- The showtabs setting is now functional: it drives mod_vimipad's new read-only
+  Map/List toggle (showViewToggle). Dependency raised to mod_vimipad 2026080810
+  (0.9.10).
+
+## 0.2.0 - 2026-08-11
+
+### Added
+- Album/swipe: multiple maps are shown one at a time with previous/next controls,
+  a counter, keyboard (arrow keys) and touch-swipe navigation. The active map and
+  its immediate neighbours are mounted lazily. A single map shows no controls.
+- Per-profile form configs are delivered via a JSON script element (deduplicated),
+  keeping js_call_amd arguments small. Added `styles.css` for the album layout.
+
+## 0.1.0 - 2026-08-11
+
+### Added
+- Initial skeleton of the ViMi Gallery activity module (depends on mod_vimipad).
+- `displaymode` setting: `page` (link and description, like mod_page) or `course`
+  (embedded on the course page with no link, like mod_label).
+- Uploaded JSON maps are stored and shown read-only through mod_vimipad's
+  embeddable editor (mountValue, read-only, lazy-mounted, dynamic height with a
+  minimum). Settings `showtabs` and `showauthors` (the tab toggle is wired through
+  and takes effect once mod_vimipad exposes a read-only view toggle).
+- Backup/restore and a null privacy provider (no personal data yet).

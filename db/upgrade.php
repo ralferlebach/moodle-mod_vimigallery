@@ -149,5 +149,36 @@ function xmldb_vimigallery_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026081117, 'vimigallery');
     }
 
+    if ($oldversion < 2026081123) {
+        // A stable identity for the origin record. Comments used to be re-linked
+        // by content hash, which is ambiguous whenever two maps are identical
+        // (empty maps, templates, identical answers) and could move a comment to
+        // the wrong map. The hash stays as an integrity marker only.
+        $table = new xmldb_table('vimigallery_item');
+        $field = new xmldb_field('sourcekey', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'sourceuserid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026081123, 'vimigallery');
+    }
+
+    if ($oldversion < 2026081125) {
+        // Contributors to a materialised item. A frozen group map is joint work,
+        // so one sourceuserid cannot describe it; without this the privacy API
+        // could not find a group member's contribution at all.
+        $table = new xmldb_table('vimigallery_item_user');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('itemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('itemid', XMLDB_KEY_FOREIGN, ['itemid'], 'vimigallery_item', ['id']);
+            $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+            $table->add_index('itemid-userid', XMLDB_INDEX_UNIQUE, ['itemid', 'userid']);
+            $dbman->create_table($table);
+        }
+        upgrade_mod_savepoint(true, 2026081125, 'vimigallery');
+    }
+
     return true;
 }

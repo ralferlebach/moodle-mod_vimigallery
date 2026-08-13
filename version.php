@@ -25,10 +25,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_vimigallery';
-$plugin->version      = 2026081122;
-$plugin->release      = '0.3.4';
+$plugin->version      = 2026081125;
+$plugin->release      = '0.3.7';
 $plugin->requires     = 2024100700;
 $plugin->maturity     = MATURITY_BETA;
 $plugin->dependencies = [
-    'mod_vimipad' => 2026081203,
+    'mod_vimipad' => 2026081208,
 ];

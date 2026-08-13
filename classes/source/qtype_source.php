@@ -226,6 +226,11 @@ class qtype_source implements source_interface {
                     'mapjson' => $mapjson,
                     'authorname' => $usercache[(int) $attempt->userid] ?? '',
                     'sourceuserid' => (int) $attempt->userid,
+                    // Identify the submission by what it actually is, not by its
+                    // position: a new attempt arriving between the initial render
+                    // and a lazy fetch would otherwise shift every later id onto
+                    // a different learner's map.
+                    'originkey' => 'qa' . (int) $attempt->id . '_' . (int) $slot,
                 ];
             }
         }
@@ -344,12 +349,17 @@ class qtype_source implements source_interface {
             $profile = isset($decoded['profile']) && is_string($decoded['profile'])
                 ? $decoded['profile'] : 'conceptmap';
             $item = new \stdClass();
-            $item->id = 'qs' . $sortorder;
+            // A stable id derived from the attempt and slot, so a lazy fetch
+            // always returns the same submission it was rendered from.
+            $item->id = $entry->originkey ?? ('qs' . $sortorder);
             $item->mapjson = $entry->mapjson;
             $item->profile = \core_text::substr($profile, 0, 40);
             $item->authorname = \core_text::substr($entry->authorname, 0, 255);
             $item->sortorder = $sortorder++;
             $item->visible = 1;
+            // Provenance must survive normalisation: without it the privacy API
+            // cannot find, export or remove a learner's materialised answer.
+            $item->sourceuserid = isset($entry->sourceuserid) ? (int) $entry->sourceuserid : null;
             $items[] = $item;
         }
         return $items;

@@ -62,6 +62,9 @@ class post_comment extends external_api {
         $cm = get_coursemodule_from_id('vimigallery', $params['cmid'], 0, false, MUST_EXIST);
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
+        // Commenting implies reading: a role that can comment but not view must
+        // not be able to reach an item through this path.
+        require_capability('mod/vimigallery:view', $context);
         require_capability('mod/vimigallery:comment', $context);
 
         global $DB;

@@ -51,6 +51,12 @@ class provider implements
             'sourceuserid' => 'privacy:metadata:vimigallery_item:sourceuserid',
         ], 'privacy:metadata:vimigallery_item');
 
+        // A materialised group map is joint work, so it records everyone who
+        // contributed rather than a single owner.
+        $collection->add_database_table('vimigallery_item_user', [
+            'userid' => 'privacy:metadata:vimigallery_item_user:userid',
+        ], 'privacy:metadata:vimigallery_item_user');
+
         $collection->add_database_table('vimigallery_comment', [
             'userid' => 'privacy:metadata:vimigallery_comment:userid',
             'content' => 'privacy:metadata:vimigallery_comment:content',
@@ -93,6 +99,21 @@ class provider implements
             'modlevel' => CONTEXT_MODULE,
             'userid' => $userid,
         ]);
+
+        // Galleries holding a group map this user contributed to.
+        $groupsql = "SELECT ctx.id
+                       FROM {vimigallery_item_user} iu
+                       JOIN {vimigallery_item} i ON i.id = iu.itemid
+                       JOIN {vimigallery} g ON g.id = i.galleryid
+                       JOIN {course_modules} cm ON cm.instance = g.id
+                       JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                       JOIN {context} ctx ON ctx.instanceid = cm.id AND ctx.contextlevel = :modlevel
+                      WHERE iu.userid = :userid";
+        $contextlist->add_from_sql($groupsql, [
+            'modname' => 'vimigallery',
+            'modlevel' => CONTEXT_MODULE,
+            'userid' => $userid,
+        ]);
         return $contextlist;
     }
 
@@ -125,6 +146,18 @@ class provider implements
                       JOIN {modules} m ON m.id = cm.module AND m.name = :modname
                      WHERE cm.id = :cmid AND i.sourceuserid IS NOT NULL";
         $userlist->add_from_sql('userid', $itemsql, [
+            'modname' => 'vimigallery',
+            'cmid' => $context->instanceid,
+        ]);
+
+        $groupsql = "SELECT iu.userid
+                       FROM {vimigallery_item_user} iu
+                       JOIN {vimigallery_item} i ON i.id = iu.itemid
+                       JOIN {vimigallery} g ON g.id = i.galleryid
+                       JOIN {course_modules} cm ON cm.instance = g.id
+                       JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                      WHERE cm.id = :cmid";
+        $userlist->add_from_sql('userid', $groupsql, [
             'modname' => 'vimigallery',
             'cmid' => $context->instanceid,
         ]);
@@ -189,10 +222,15 @@ class provider implements
             if (!$cm) {
                 continue;
             }
-            $items = $DB->get_records('vimigallery_item', [
-                'galleryid' => $cm->instance,
-                'sourceuserid' => $userid,
-            ], 'sortorder ASC');
+            $items = $DB->get_records_sql(
+                "SELECT DISTINCT i.*
+                   FROM {vimigallery_item} i
+              LEFT JOIN {vimigallery_item_user} iu ON iu.itemid = i.id AND iu.userid = :contributor
+                  WHERE i.galleryid = :galleryid
+                        AND (i.sourceuserid = :owner OR iu.userid IS NOT NULL)
+               ORDER BY i.sortorder ASC",
+                ['galleryid' => $cm->instance, 'owner' => $userid, 'contributor' => $userid]
+            );
             if (empty($items)) {
                 continue;
             }
@@ -233,6 +271,11 @@ class provider implements
                 'galleryid = :galleryid AND sourceuserid IS NOT NULL',
                 ['galleryid' => $cm->instance]
             );
+            $itemids = $DB->get_fieldset_select('vimigallery_item', 'id', 'galleryid = ?', [$cm->instance]);
+            if (!empty($itemids)) {
+                [$insql, $inparams] = $DB->get_in_or_equal($itemids);
+                $DB->delete_records_select('vimigallery_item_user', "itemid $insql", $inparams);
+            }
         }
     }
 
@@ -255,12 +298,49 @@ class provider implements
                     'galleryid' => $cm->instance,
                     'userid' => $userid,
                 ]);
+                // An individual map is this learner's own work, so the copy goes.
                 $DB->delete_records('vimigallery_item', [
                     'galleryid' => $cm->instance,
                     'sourceuserid' => $userid,
                 ]);
+                // A group map is not: it also holds other people's work, so the
+                // map and its group label stay and only the personal link is
+                // removed. That mirrors how mod_vimipad anonymises shared
+                // contributions rather than deleting them.
+                self::unlink_contributions($cm->instance, [$userid]);
             }
         }
+    }
+
+    /**
+     * Remove users from the contributor list of this gallery's group maps.
+     *
+     * The maps themselves are left untouched: a frozen group map contains other
+     * people's work, and its author label is the group, not a person. Removing
+     * the link is what anonymises the contribution.
+     *
+     * @param int $galleryid The gallery instance id.
+     * @param array $userids The users to unlink.
+     * @return void
+     */
+    protected static function unlink_contributions(int $galleryid, array $userids): void {
+        global $DB;
+
+        $userids = array_values(array_filter(array_map('intval', $userids)));
+        if (empty($userids)) {
+            return;
+        }
+        $itemids = $DB->get_fieldset_select('vimigallery_item', 'id', 'galleryid = ?', [$galleryid]);
+        if (empty($itemids)) {
+            return;
+        }
+        [$initem, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED, 'it');
+        [$inuser, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'us');
+        $DB->delete_records_select(
+            'vimigallery_item_user',
+            "itemid $initem AND userid $inuser",
+            array_merge($itemparams, $userparams)
+        );
     }
 
     /**
@@ -287,5 +367,6 @@ class provider implements
         $params['galleryid'] = $cm->instance;
         $DB->delete_records_select('vimigallery_comment', "galleryid = :galleryid AND userid $insql", $params);
         $DB->delete_records_select('vimigallery_item', "galleryid = :galleryid AND sourceuserid $insql", $params);
+        self::unlink_contributions((int) $cm->instance, $userids);
     }
 }

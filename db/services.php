@@ -39,7 +39,7 @@ $functions = [
         'description' => 'Post a comment on a map in a gallery.',
         'type' => 'write',
         'ajax' => true,
-        'capabilities' => 'mod/vimigallery:comment',
+        'capabilities' => 'mod/vimigallery:view, mod/vimigallery:comment',
     ],
     'mod_vimigallery_get_item' => [
         'classname' => 'mod_vimigallery\external\get_item',

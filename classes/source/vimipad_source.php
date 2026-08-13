@@ -188,6 +188,13 @@ class vimipad_source implements source_interface {
                 'mapjson' => $row->mapjson,
                 'authorname' => $groupid > 0 ? $groupnames[$groupid] : ($names[(int) $row->userid] ?? ''),
                 'sourceuserid' => $groupid > 0 ? null : (int) $row->userid,
+                // A group map is joint work: one owner id cannot describe it, so
+                // the contributors travel alongside and the gallery records them.
+                'contributors' => $groupid > 0
+                    ? \mod_vimipad\api\submissions::contributors((int) $row->id)
+                    : [],
+                // Identify the submission by its snapshot, not by its position.
+                'originkey' => 'vp' . (int) $row->id,
             ];
         }
         return $entries;
@@ -233,13 +240,14 @@ class vimipad_source implements source_interface {
                 ? $decoded['profile'] : 'conceptmap';
 
             $item = new \stdClass();
-            $item->id = 'vp' . $sortorder;
+            $item->id = $entry->originkey ?? ('vp' . $sortorder);
             $item->mapjson = $entry->mapjson;
             $item->profile = \core_text::substr($profile, 0, 40);
             $item->authorname = \core_text::substr($entry->authorname, 0, 255);
             $item->sortorder = $sortorder++;
             $item->visible = 1;
             $item->sourceuserid = isset($entry->sourceuserid) ? (int) $entry->sourceuserid : null;
+            $item->contributors = $entry->contributors ?? [];
             $items[] = $item;
         }
         return $items;

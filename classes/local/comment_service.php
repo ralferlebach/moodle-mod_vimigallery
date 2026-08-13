@@ -39,7 +39,16 @@ class comment_service {
     public static function post(\stdClass $cm, int $itemid, int $userid, string $content): \stdClass {
         global $DB;
 
-        if (!$DB->record_exists('vimigallery_item', ['id' => $itemid, 'galleryid' => $cm->instance])) {
+        // The item must belong to this gallery and be one the reader can see:
+        // a hidden item has been curated away, so it must not collect comments
+        // even if someone knows its id.
+        if (
+            !$DB->record_exists('vimigallery_item', [
+            'id' => $itemid,
+            'galleryid' => $cm->instance,
+            'visible' => 1,
+            ])
+        ) {
             throw new \moodle_exception('invaliditem', 'mod_vimigallery');
         }
         $content = \core_text::substr(trim($content), 0, self::MAX_LENGTH);

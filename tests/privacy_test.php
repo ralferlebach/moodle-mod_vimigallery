@@ -189,4 +189,74 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
         // Nothing was removed: none of these items derive from a learner.
         $this->assertEquals($before, $DB->count_records('vimigallery_item', ['galleryid' => $cm->instance]));
     }
+
+    /**
+     * A contributor to a materialised group map is discoverable and exportable,
+     * and a deletion request removes only their link: the map and its group
+     * label stay, because they also hold other people's work.
+     *
+     * @return void
+     */
+    public function test_group_map_contribution_is_anonymised_not_deleted(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$context, $cm] = $this->make();
+        $one = $this->getDataGenerator()->create_user();
+        $two = $this->getDataGenerator()->create_user();
+
+        $mapjson = '{"profile":"conceptmap","nodes":[],"relations":[]}';
+        $itemid = (int) $DB->insert_record('vimigallery_item', (object) [
+            'galleryid' => $cm->instance,
+            'sortorder' => 0,
+            'visible' => 1,
+            'sourcetype' => 'vimipad',
+            'profile' => 'conceptmap',
+            'mapjson' => $mapjson,
+            'authorname' => 'Group A',
+            'contenthash' => sha1($mapjson),
+            // A group map has no single owner.
+            'sourceuserid' => null,
+            'sourcekey' => 'vp1',
+            'timecreated' => time(),
+        ]);
+        foreach ([$one, $two] as $member) {
+            $DB->insert_record('vimigallery_item_user', (object) [
+                'itemid' => $itemid,
+                'userid' => $member->id,
+            ]);
+        }
+
+        // Discovery finds the gallery for a contributor, even though the item
+        // carries no sourceuserid.
+        $contexts = array_map('intval', provider::get_contexts_for_userid((int) $one->id)->get_contextids());
+        $this->assertContains((int) $context->id, $contexts);
+
+        // Both contributors are listed among the users with data here.
+        $userlist = new \core_privacy\local\request\userlist($context, 'mod_vimigallery');
+        provider::get_users_in_context($userlist);
+        $listed = array_map('intval', $userlist->get_userids());
+        $this->assertContains((int) $one->id, $listed);
+        $this->assertContains((int) $two->id, $listed);
+
+        // The shared map is exported for a contributor.
+        $this->export_context_data_for_user((int) $one->id, $context, 'mod_vimigallery');
+        $this->assertTrue(writer::with_context($context)->has_any_data());
+
+        // A deletion request removes only that person's link.
+        $contextlist = new approved_contextlist($one, 'mod_vimigallery', [$context->id]);
+        provider::delete_data_for_user($contextlist);
+
+        $item = $DB->get_record('vimigallery_item', ['id' => $itemid]);
+        $this->assertNotEmpty($item, 'the shared map must survive');
+        $this->assertSame('Group A', $item->authorname, 'the group label is not personal data');
+        $this->assertEquals(0, $DB->count_records('vimigallery_item_user', [
+            'itemid' => $itemid,
+            'userid' => $one->id,
+        ]));
+        $this->assertEquals(1, $DB->count_records('vimigallery_item_user', [
+            'itemid' => $itemid,
+            'userid' => $two->id,
+        ]), 'the other contributor keeps their link');
+    }
 }

@@ -167,7 +167,7 @@ class mod_vimigallery_mod_form extends moodleform_mod {
         $mform->setDefault('showauthors', 0);
         $mform->addHelpButton('showauthors', 'showauthors', 'mod_vimigallery');
 
-                $mform->addElement('advcheckbox', 'allowcomments', get_string('allowcomments', 'mod_vimigallery'));
+        $mform->addElement('advcheckbox', 'allowcomments', get_string('allowcomments', 'mod_vimigallery'));
         $mform->addHelpButton('allowcomments', 'allowcomments', 'mod_vimigallery');
         $mform->setDefault('allowcomments', 0);
 

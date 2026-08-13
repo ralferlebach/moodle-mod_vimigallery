@@ -183,4 +183,104 @@ final class hardening_test extends \advanced_testcase {
         $item = reset($items);
         $this->assertSame(sha1($valid), $item->contenthash);
     }
+
+    /**
+     * Two byte-identical maps keep their own comments across a rebuild.
+     *
+     * Comments used to be re-linked by content hash, which cannot tell identical
+     * maps apart - empty maps, a shared template, identical answers - and could
+     * therefore move a comment onto someone else's map.
+     *
+     * @return void
+     */
+    public function test_identical_maps_keep_separate_comments(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $module = $this->getDataGenerator()->create_module(
+            'vimigallery',
+            ['course' => $course->id, 'allowcomments' => 1]
+        );
+        $cm = get_coursemodule_from_instance('vimigallery', $module->id);
+        $context = \context_module::instance($cm->id);
+
+        // Two uploads with exactly the same content.
+        $map = (string) json_encode([
+            'profile' => 'conceptmap',
+            'nodes' => [['stableid' => 'n1', 'label' => 'Same']],
+            'relations' => [],
+        ]);
+        $fs = get_file_storage();
+        $base = [
+            'contextid' => $context->id,
+            'component' => 'mod_vimigallery',
+            'filearea' => 'source',
+            'itemid' => 0,
+            'filepath' => '/',
+        ];
+        $fs->create_file_from_string($base + ['filename' => 'one.json'], $map);
+        $fs->create_file_from_string($base + ['filename' => 'two.json'], $map);
+
+        vimigallery_rebuild_items($module->id, $context);
+        $items = array_values($DB->get_records('vimigallery_item', ['galleryid' => $module->id], 'sourcekey ASC'));
+        $this->assertCount(2, $items);
+        $this->assertNotSame($items[0]->sourcekey, $items[1]->sourcekey);
+
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        comment_service::post($cm, (int) $items[0]->id, (int) $user->id, 'on one');
+        comment_service::post($cm, (int) $items[1]->id, (int) $user->id, 'on two');
+
+        // A rebuild must leave each comment on its own map.
+        vimigallery_rebuild_items($module->id, $context);
+        $after = $DB->get_records('vimigallery_item', ['galleryid' => $module->id], 'sourcekey ASC');
+        $bykey = [];
+        foreach ($after as $item) {
+            $bykey[$item->sourcekey] = (int) $item->id;
+        }
+        $comments = $DB->get_records('vimigallery_comment', ['galleryid' => $module->id]);
+        $this->assertCount(2, $comments);
+        $placed = [];
+        foreach ($comments as $comment) {
+            $placed[$comment->content] = (int) $comment->itemid;
+        }
+        $this->assertSame($bykey[$items[0]->sourcekey], $placed['on one']);
+        $this->assertSame($bykey[$items[1]->sourcekey], $placed['on two']);
+        $this->assertNotSame($placed['on one'], $placed['on two']);
+    }
+
+    /**
+     * A hidden item cannot collect comments, even when its id is known.
+     *
+     * @return void
+     */
+    public function test_hidden_item_refuses_comments(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $module = $this->getDataGenerator()->create_module(
+            'vimigallery',
+            ['course' => $course->id, 'allowcomments' => 1]
+        );
+        $cm = get_coursemodule_from_instance('vimigallery', $module->id);
+        $mapjson = '{"profile":"conceptmap","nodes":[],"relations":[]}';
+        $itemid = (int) $DB->insert_record('vimigallery_item', (object) [
+            'galleryid' => $module->id,
+            'sortorder' => 0,
+            'visible' => 0,
+            'sourcetype' => 'upload',
+            'profile' => 'conceptmap',
+            'mapjson' => $mapjson,
+            'authorname' => '',
+            'contenthash' => sha1($mapjson),
+            'sourceuserid' => null,
+            'sourcekey' => 'upload:hidden.json',
+            'timecreated' => time(),
+        ]);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $this->expectException(\moodle_exception::class);
+        comment_service::post($cm, $itemid, (int) $user->id, 'should not stick');
+    }
 }

@@ -58,6 +58,12 @@ MAXDURATION    ?= 2000
 PHPCS         ?= phpcs
 PHPCBF        ?= phpcbf
 NPX           ?= npx
+# Refresh the browserslist database before a Grunt/ESLint run. Off by default:
+# it writes to the lockfile and reaches the network, which a plain `make check`
+# should not do. caniuse-lite going stale only produces a warning, never a wrong
+# build, so this is a maintenance step rather than part of every run.
+#   make amd BROWSERSLIST_UPDATE=1
+BROWSERSLIST_UPDATE ?= 0
 
 .PHONY: all fix check clear test-js \
         load-seed jmeter jmeter-setup load-k6 k6-setup \
@@ -140,6 +146,10 @@ lint-js:
 amd:
 	@echo ""
 	@echo "=== AMD rebuild (Moodle Grunt; skipped when amd/src/ is empty) ==="
+	@if [ "$(BROWSERSLIST_UPDATE)" = "1" ]; then \
+		echo "Updating the browserslist database (BROWSERSLIST_UPDATE=1)..."; \
+		cd $(PLUGIN_DIR) && $(NPX) browserslist@latest --update-db || true; \
+	fi
 	@if ls $(PLUGIN_DIR)/amd/src/*.js 2>/dev/null | grep -q .; then \
 		cd $(PLUGIN_DIR) && $(NPX) grunt amd --force; \
 	else \

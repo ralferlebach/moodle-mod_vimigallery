@@ -83,6 +83,25 @@ class restore_vimigallery_activity_structure_step extends restore_activity_struc
      * @param array $data The comment data.
      * @return void
      */
+    protected function process_vimigallery_item_user($data) {
+        global $DB;
+        $data = (object) $data;
+        $data->itemid = $this->get_new_parentid('vimigallery_item');
+        $userid = $this->get_mappingid('user', $data->userid);
+        if (!$userid) {
+            return;
+        }
+        $data->userid = $userid;
+        unset($data->id);
+        $DB->insert_record('vimigallery_item_user', $data);
+    }
+
+    /**
+     * Restore one comment on a map.
+     *
+     * @param array $data The comment data.
+     * @return void
+     */
     protected function process_vimigallery_comment($data) {
         global $DB;
         $data = (object) $data;

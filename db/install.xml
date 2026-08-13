@@ -40,6 +40,7 @@
         <FIELD NAME="authorname" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="contenthash" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false" COMMENT="sha1 of the map content, stable across rebuilds"/>
         <FIELD NAME="sourceuserid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The learner whose work this materialised copy derives from, if any"/>
+        <FIELD NAME="sourcekey" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Stable identity of the origin record, used to re-link comments across rebuilds"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
@@ -69,6 +70,21 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="itemid-timecreated" UNIQUE="false" FIELDS="itemid, timecreated"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="vimigallery_item_user" COMMENT="Contributors to a materialised item, for group maps">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="itemid" TYPE="foreign" FIELDS="itemid" REFTABLE="vimigallery_item" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="itemid-userid" UNIQUE="true" FIELDS="itemid, userid"/>
       </INDEXES>
     </TABLE>
   </TABLES>

@@ -237,6 +237,11 @@ function vimigallery_delete_instance($id) {
     // Children first, so a database that enforces the foreign keys does not
     // refuse the delete and no orphaned comments can survive the gallery.
     $DB->delete_records('vimigallery_comment', ['galleryid' => $id]);
+    $itemids = $DB->get_fieldset_select('vimigallery_item', 'id', 'galleryid = ?', [$id]);
+    if (!empty($itemids)) {
+        [$insql, $inparams] = $DB->get_in_or_equal($itemids);
+        $DB->delete_records_select('vimigallery_item_user', "itemid $insql", $inparams);
+    }
     $DB->delete_records('vimigallery_item', ['galleryid' => $id]);
     $DB->delete_records('vimigallery', ['id' => $id]);
 
@@ -282,7 +287,7 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
     // Remember which content each existing comment belonged to, so comments can
     // survive a rebuild when the same map is still present.
     $oldcomments = $DB->get_records_sql(
-        "SELECT c.id, i.contenthash
+        "SELECT c.id, i.sourcekey, i.contenthash
            FROM {vimigallery_comment} c
            JOIN {vimigallery_item} i ON i.id = c.itemid
           WHERE c.galleryid = :galleryid",
@@ -295,10 +300,15 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
     // transaction, so a failure while replacing the items rolls back to the
     // previous, working gallery instead of leaving it emptied.
     $transaction = $DB->start_delegated_transaction();
+    $olditemids = $DB->get_fieldset_select('vimigallery_item', 'id', 'galleryid = ?', [$galleryid]);
+    if (!empty($olditemids)) {
+        [$insql, $inparams] = $DB->get_in_or_equal($olditemids);
+        $DB->delete_records_select('vimigallery_item_user', "itemid $insql", $inparams);
+    }
     $DB->delete_records('vimigallery_item', ['galleryid' => $galleryid]);
     $sortorder = 0;
     foreach ($entries as $entry) {
-        $DB->insert_record('vimigallery_item', (object) [
+        $itemid = $DB->insert_record('vimigallery_item', (object) [
             'galleryid' => $galleryid,
             'sortorder' => $sortorder++,
             'visible' => 1,
@@ -308,8 +318,15 @@ function vimigallery_rebuild_items($galleryid, context_module $context) {
             'authorname' => $entry['authorname'],
             'contenthash' => sha1($entry['mapjson']),
             'sourceuserid' => $entry['sourceuserid'] ?? null,
+            'sourcekey' => $entry['sourcekey'] ?? null,
             'timecreated' => time(),
         ]);
+        foreach ($entry['contributors'] ?? [] as $contributor) {
+            $DB->insert_record('vimigallery_item_user', (object) [
+                'itemid' => $itemid,
+                'userid' => (int) $contributor,
+            ]);
+        }
     }
     vimigallery_relink_comments($galleryid, $oldcomments);
     $transaction->allow_commit();
@@ -338,6 +355,11 @@ function vimigallery_collect_entries($gallery, context_module $context) {
                     'mapjson' => $sourceitem->mapjson,
                     'authorname' => $sourceitem->authorname,
                     'sourceuserid' => $sourceitem->sourceuserid ?? null,
+                    // The source item id is already a stable origin identity
+                    // (attempt+slot, snapshot, record), so it doubles as the key
+                    // that carries comments across a rebuild.
+                    'sourcekey' => (string) $sourceitem->id,
+                    'contributors' => $sourceitem->contributors ?? [],
                 ];
             }
         }
@@ -384,6 +406,10 @@ function vimigallery_upload_entries(context_module $context) {
             'mapjson' => $content,
             'authorname' => core_text::substr($author, 0, 255),
             'sourceuserid' => null,
+            // An uploaded file keeps its identity through its stored name, so a
+            // comment stays with the same file across a rebuild even when two
+            // uploads happen to hold identical maps.
+            'sourcekey' => 'upload:' . $file->get_filename(),
         ];
     }
 
@@ -402,17 +428,25 @@ function vimigallery_relink_comments($galleryid, array $oldcomments) {
     if (empty($oldcomments)) {
         return;
     }
-    $newitems = $DB->get_records('vimigallery_item', ['galleryid' => $galleryid], '', 'id, contenthash');
-    $hashtoid = [];
+
+    // Match on the origin identity, not on the content. Two maps can legitimately
+    // be byte-identical - empty maps, a shared template, identical answers - and
+    // a hash cannot tell them apart, so hash matching could move a comment onto
+    // someone else's map. The content hash remains only as an integrity marker.
+    $newitems = $DB->get_records('vimigallery_item', ['galleryid' => $galleryid], '', 'id, sourcekey');
+    $keytoid = [];
     foreach ($newitems as $item) {
-        if (!empty($item->contenthash) && !isset($hashtoid[$item->contenthash])) {
-            $hashtoid[$item->contenthash] = $item->id;
+        if (!empty($item->sourcekey) && !isset($keytoid[$item->sourcekey])) {
+            $keytoid[$item->sourcekey] = $item->id;
         }
     }
+
     foreach ($oldcomments as $comment) {
-        if (!empty($comment->contenthash) && isset($hashtoid[$comment->contenthash])) {
-            $DB->set_field('vimigallery_comment', 'itemid', $hashtoid[$comment->contenthash], ['id' => $comment->id]);
+        $key = $comment->sourcekey ?? null;
+        if (!empty($key) && isset($keytoid[$key])) {
+            $DB->set_field('vimigallery_comment', 'itemid', $keytoid[$key], ['id' => $comment->id]);
         } else {
+            // The map this comment belonged to is no longer in the gallery.
             $DB->delete_records('vimigallery_comment', ['id' => $comment->id]);
         }
     }
