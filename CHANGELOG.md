@@ -1,5 +1,14 @@
 # Changelog — mod_vimigallery
 
+## 0.3.9 - 2026-08-13
+
+### Fixed
+- The settings scenarios named the activity by its display name. That step passes
+  its argument straight to modedit.php as the plugin name, so "ViMi Gallery"
+  became the component mod_ViMiGallery and Moodle refused it. Moodle 4.5 happened
+  not to reach the check, which is why it only failed from 5.0 onwards. The
+  scenarios now use the plugin name, vimigallery.
+
 ## 0.3.8 - 2026-08-13
 
 ### Fixed

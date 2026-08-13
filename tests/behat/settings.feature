@@ -18,7 +18,7 @@ Feature: Configure a ViMi Gallery activity
   Scenario: Teacher creates a gallery with comments and comparison enabled
     Given I am on the "Course 1" course page logged in as teacher1
     And I turn editing mode on
-    When I add a "ViMi Gallery" activity to course "Course 1" section "1" and I fill the form with:
+    When I add a "vimigallery" activity to course "Course 1" section "1" and I fill the form with:
       | Name                                  | Shared maps |
       | Allow comments on maps                | 1           |
       | Enable side-by-side comparison        | 1           |
@@ -27,7 +27,7 @@ Feature: Configure a ViMi Gallery activity
   Scenario: Comment and compare settings are available on the form
     Given I am on the "Course 1" course page logged in as teacher1
     And I turn editing mode on
-    When I add a "ViMi Gallery" activity to course "Course 1" section "1"
+    When I add a "vimigallery" activity to course "Course 1" section "1"
     Then I should see "Allow comments on maps"
     And I should see "Enable side-by-side comparison"
     And I should see "Require comments"
