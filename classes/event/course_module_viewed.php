@@ -14,21 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace mod_vimigallery\event;
+
 /**
- * Version details for mod_vimigallery.
+ * The gallery was viewed.
+ *
+ * \core\event\course_module_viewed is abstract: each module declares its own
+ * subclass naming the table the objectid refers to. view.php used to instantiate
+ * the core class directly, which threw on every page view.
  *
  * @package    mod_vimigallery
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-defined('MOODLE_INTERNAL') || die();
-
-$plugin->component = 'mod_vimigallery';
-$plugin->version      = 2026081126;
-$plugin->release      = '0.3.8';
-$plugin->requires     = 2024100700;
-$plugin->maturity     = MATURITY_BETA;
-$plugin->dependencies = [
-    'mod_vimipad' => 2026081208,
-];
+class course_module_viewed extends \core\event\course_module_viewed {
+    /**
+     * Declare what this event reads and which table its objectid points at.
+     *
+     * @return void
+     */
+    protected function init() {
+        $this->data['crud'] = 'r';
+        $this->data['edulevel'] = self::LEVEL_PARTICIPATING;
+        $this->data['objecttable'] = 'vimigallery';
+    }
+}

@@ -283,4 +283,36 @@ final class hardening_test extends \advanced_testcase {
         $this->expectException(\moodle_exception::class);
         comment_service::post($cm, $itemid, (int) $user->id, 'should not stick');
     }
+
+    /**
+     * The viewed event can actually be instantiated and triggered.
+     *
+     * \core\event\course_module_viewed is abstract, so triggering it directly
+     * threw on every page view - a defect no unit test noticed because none of
+     * them loaded view.php.
+     *
+     * @return void
+     */
+    public function test_viewed_event_can_be_triggered(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $module = $this->getDataGenerator()->create_module('vimigallery', ['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('vimigallery', $module->id);
+        $context = \context_module::instance($cm->id);
+
+        $sink = $this->redirectEvents();
+        $event = \mod_vimigallery\event\course_module_viewed::create([
+            'objectid' => $module->id,
+            'context' => $context,
+        ]);
+        $event->trigger();
+        $events = $sink->get_events();
+        $sink->close();
+
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(\mod_vimigallery\event\course_module_viewed::class, $events[0]);
+        $this->assertEquals($context->id, $events[0]->contextid);
+        $this->assertEquals($module->id, $events[0]->objectid);
+    }
 }

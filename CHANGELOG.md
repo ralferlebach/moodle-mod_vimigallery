@@ -1,5 +1,14 @@
 # Changelog — mod_vimigallery
 
+## 0.3.8 - 2026-08-13
+
+### Fixed
+- Viewing a gallery threw: view.php instantiated \core\event\course_module_viewed,
+  which is abstract. Each module must declare its own subclass naming the table
+  the objectid refers to, so mod_vimigallery\event\course_module_viewed now
+  exists and is used. Behat caught this because it is the only suite that loads
+  the page; a unit test now covers the event as well.
+
 ## 0.3.7 - 2026-08-12
 
 ### Added
