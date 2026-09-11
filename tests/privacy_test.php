@@ -307,7 +307,7 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
         $a = $this->getDataGenerator()->create_user();
         $b = $this->getDataGenerator()->create_user();
 
-        // make() already left one upload item (item 1). Add the other two.
+        // The make() helper already left one upload item (item 1); add the other two.
         $upload = (int) $DB->get_field_sql(
             "SELECT id FROM {vimigallery_item} WHERE galleryid = ? ORDER BY id ASC",
             [$cm->instance]

@@ -5,6 +5,9 @@
 First release candidate. Maturity raised to MATURITY_RC.
 
 ### Fixed
+- A test comment started lowercase, which the strict CI lint (moodle-cs) rejects;
+  the local check had silently passed because the moodle standard was not
+  registered in that run.
 - Privacy (P1, release blocker): a context-wide deletion left materialised group
   maps behind. It only removed items with a sourceuserid (individual maps) and,
   for group maps, deleted just the contributor links while the shared mapjson
