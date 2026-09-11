@@ -261,22 +261,33 @@ class provider implements
             return;
         }
         $cm = get_coursemodule_from_id('vimigallery', $context->instanceid);
-        if ($cm) {
-            $DB->delete_records('vimigallery_comment', ['galleryid' => $cm->instance]);
-            // Materialised copies of learners' work are derived data: the source
-            // activity remains the authoritative record, so the copy is removed
-            // rather than anonymised.
-            $DB->delete_records_select(
-                'vimigallery_item',
-                'galleryid = :galleryid AND sourceuserid IS NOT NULL',
-                ['galleryid' => $cm->instance]
-            );
-            $itemids = $DB->get_fieldset_select('vimigallery_item', 'id', 'galleryid = ?', [$cm->instance]);
-            if (!empty($itemids)) {
-                [$insql, $inparams] = $DB->get_in_or_equal($itemids);
-                $DB->delete_records_select('vimigallery_item_user', "itemid $insql", $inparams);
-            }
+        if (!$cm) {
+            return;
         }
+
+        $DB->delete_records('vimigallery_comment', ['galleryid' => $cm->instance]);
+
+        // Every learner-derived item goes: an individual map (sourceuserid set)
+        // and a group map (sourceuserid null but at least one contributor) both
+        // hold materialised learner work. Only teacher uploads - no owner and no
+        // contributors - survive a context-wide deletion. A null sourceuserid is
+        // not on its own proof that an item is not personal data.
+        $itemids = $DB->get_fieldset_sql(
+            "SELECT DISTINCT i.id
+               FROM {vimigallery_item} i
+          LEFT JOIN {vimigallery_item_user} iu ON iu.itemid = i.id
+              WHERE i.galleryid = :galleryid
+                    AND (i.sourceuserid IS NOT NULL OR iu.id IS NOT NULL)",
+            ['galleryid' => $cm->instance]
+        );
+        if (empty($itemids)) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($itemids);
+        // Contributor links first, so no row is left pointing at a deleted item.
+        $DB->delete_records_select('vimigallery_item_user', "itemid $insql", $inparams);
+        $DB->delete_records_select('vimigallery_item', "id $insql", $inparams);
     }
 
     /**

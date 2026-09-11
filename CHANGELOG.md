@@ -1,5 +1,27 @@
 # Changelog — mod_vimigallery
 
+## 1.0.0-RC1 - 2026-09-11
+
+First release candidate. Maturity raised to MATURITY_RC.
+
+### Fixed
+- Privacy (P1, release blocker): a context-wide deletion left materialised group
+  maps behind. It only removed items with a sourceuserid (individual maps) and,
+  for group maps, deleted just the contributor links while the shared mapjson
+  stayed. It now removes every learner-derived item - individual maps and group
+  maps (no owner but at least one contributor) - along with their contributor
+  links and comments, while teacher uploads survive. A null sourceuserid is no
+  longer treated as proof that an item is not personal data. Single-contributor
+  deletion is unchanged: a shared group map and its other contributors stay.
+
+### Added
+- $plugin->supported = [405, 502], matching the rest of the family, with the
+  support range stated in the README.
+- Moodle 5.1 in development and release CI.
+- The release workflow can pin the mod_vimipad dependency to an immutable tag or
+  SHA (workflow input or VIMIPAD_RELEASE_REF) and records the qualified SHA in
+  the job summary; development runs still float on development.
+
 ## 0.3.9 - 2026-08-13
 
 ### Fixed

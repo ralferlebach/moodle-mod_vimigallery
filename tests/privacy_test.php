@@ -259,4 +259,97 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
             'userid' => $two->id,
         ]), 'the other contributor keeps their link');
     }
+
+    /**
+     * Insert a materialised item.
+     *
+     * @param object $cm The gallery course module.
+     * @param int|null $sourceuserid The single owner, or null for a group map.
+     * @param array $contributors Contributor user ids (for a group map).
+     * @param string $key A unique source key.
+     * @return int The new item id.
+     */
+    private function add_item($cm, ?int $sourceuserid, array $contributors, string $key): int {
+        global $DB;
+        $map = '{"profile":"conceptmap","nodes":[],"relations":[]}';
+        $itemid = (int) $DB->insert_record('vimigallery_item', (object) [
+            'galleryid' => $cm->instance,
+            'sortorder' => 0,
+            'visible' => 1,
+            'sourcetype' => $sourceuserid !== null ? 'vimipad' : ($contributors ? 'vimipad' : 'upload'),
+            'profile' => 'conceptmap',
+            'mapjson' => $map,
+            'authorname' => $contributors ? 'Group A' : '',
+            'contenthash' => sha1($key),
+            'sourceuserid' => $sourceuserid,
+            'sourcekey' => $key,
+            'timecreated' => time(),
+        ]);
+        foreach ($contributors as $userid) {
+            $DB->insert_record('vimigallery_item_user', (object) ['itemid' => $itemid, 'userid' => $userid]);
+        }
+        return $itemid;
+    }
+
+    /**
+     * A context-wide deletion removes every learner-derived item - individual
+     * and group maps alike - and their contributor links and comments, while a
+     * teacher upload survives. A null sourceuserid must not be read as proof that
+     * a group map is not personal data.
+     *
+     * @return void
+     */
+    public function test_context_delete_removes_group_maps(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$context, $cm] = $this->make();
+        $a = $this->getDataGenerator()->create_user();
+        $b = $this->getDataGenerator()->create_user();
+
+        // make() already left one upload item (item 1). Add the other two.
+        $upload = (int) $DB->get_field_sql(
+            "SELECT id FROM {vimigallery_item} WHERE galleryid = ? ORDER BY id ASC",
+            [$cm->instance]
+        );
+        $individual = $this->add_item($cm, (int) $a->id, [], 'vp-individual');
+        $group = $this->add_item($cm, null, [(int) $a->id, (int) $b->id], 'vp-group');
+
+        \mod_vimigallery\local\comment_service::post($cm, $individual, (int) $a->id, 'on 2');
+        \mod_vimigallery\local\comment_service::post($cm, $group, (int) $b->id, 'on 3');
+
+        provider::delete_data_for_all_users_in_context($context);
+
+        // Teacher upload stays; both learner maps go.
+        $this->assertTrue($DB->record_exists('vimigallery_item', ['id' => $upload]));
+        $this->assertFalse($DB->record_exists('vimigallery_item', ['id' => $individual]));
+        $this->assertFalse($DB->record_exists('vimigallery_item', ['id' => $group]));
+        // No orphaned contributor links or comments.
+        $this->assertEquals(0, $DB->count_records('vimigallery_item_user'));
+        $this->assertEquals(0, $DB->count_records('vimigallery_comment', ['galleryid' => $cm->instance]));
+    }
+
+    /**
+     * Deleting a single contributor still leaves a group map and its other
+     * contributor untouched, so context-wide and single-user deletion keep their
+     * different, correct semantics.
+     *
+     * @return void
+     */
+    public function test_single_contributor_delete_keeps_shared_map(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$context, $cm] = $this->make();
+        $a = $this->getDataGenerator()->create_user();
+        $b = $this->getDataGenerator()->create_user();
+        $group = $this->add_item($cm, null, [(int) $a->id, (int) $b->id], 'vp-group');
+
+        $contextlist = new approved_contextlist($a, 'mod_vimigallery', [$context->id]);
+        provider::delete_data_for_user($contextlist);
+
+        $this->assertTrue($DB->record_exists('vimigallery_item', ['id' => $group]), 'the shared map survives');
+        $this->assertEquals(0, $DB->count_records('vimigallery_item_user', ['itemid' => $group, 'userid' => $a->id]));
+        $this->assertEquals(1, $DB->count_records('vimigallery_item_user', ['itemid' => $group, 'userid' => $b->id]));
+    }
 }

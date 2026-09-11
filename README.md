@@ -8,6 +8,9 @@ editor.
 Requires **mod_vimipad** (>= 0.9.17): the gallery validates every map it
 materialises through the parent plugin's public map-value API.
 
+Supported Moodle versions: **4.5, 5.0, 5.1 and 5.2** (`$plugin->supported =
+[405, 502]`), the same range as the rest of the ViMi family.
+
 ## Where the maps come from
 
 A gallery draws its maps from one of four sources:
