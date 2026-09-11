@@ -1,0 +1,284 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * The main mod_vimigallery configuration form.
+ *
+ * @package    mod_vimigallery
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->dirroot . '/course/moodleform_mod.php');
+
+/**
+ * Module instance settings form.
+ */
+class mod_vimigallery_mod_form extends moodleform_mod {
+    /**
+     * Define the form.
+     *
+     * @return void
+     */
+    public function definition() {
+        $mform = $this->_form;
+
+        $mform->addElement('header', 'general', get_string('general', 'form'));
+
+        $mform->addElement('text', 'name', get_string('name'), ['size' => 64]);
+        $mform->setType('name', PARAM_TEXT);
+        $mform->addRule('name', null, 'required', null, 'client');
+        $mform->addRule('name', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
+
+        $this->standard_intro_elements();
+
+        // Sources.
+        $this->add_source_elements($mform);
+
+        $this->add_display_elements($mform);
+
+        $this->standard_coursemodule_elements();
+        $this->add_action_buttons();
+    }
+
+
+    /**
+     * The source section: where the gallery takes its maps from.
+     *
+     * @param MoodleQuickForm $mform The form being built.
+     * @return void
+     */
+    protected function add_source_elements($mform) {
+        global $COURSE;
+
+        $mform->addElement('header', 'sourceheader', get_string('sourceheader', 'mod_vimigallery'));
+        $mform->setExpanded('sourceheader');
+
+        $mform->addElement('select', 'sourcetype', get_string('sourcetype', 'mod_vimigallery'), [
+            'upload' => get_string('source_upload', 'mod_vimigallery'),
+            'datafield' => get_string('source_datafield', 'mod_vimigallery'),
+            'qtype' => get_string('source_qtype', 'mod_vimigallery'),
+            'vimipad' => get_string('source_vimipad', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('sourcetype', 'upload');
+        $mform->addHelpButton('sourcetype', 'sourcetype', 'mod_vimigallery');
+
+        // Upload source: one or more exported JSON maps.
+        $mform->addElement(
+            'filemanager',
+            'vimijson',
+            get_string('sourcefiles', 'mod_vimigallery'),
+            null,
+            ['subdirs' => 0, 'maxfiles' => 200, 'maxbytes' => \mod_vimipad\api\value::MAX_BYTES, 'accepted_types' => ['.json']]
+        );
+        $mform->addHelpButton('vimijson', 'sourcefiles', 'mod_vimigallery');
+        $mform->hideIf('vimijson', 'sourcetype', 'neq', 'upload');
+
+        // Datafield source: a ViMi Pad field of a Database activity in this course.
+        $datafieldsources = vimigallery_list_datafield_sources($COURSE->id);
+        if (empty($datafieldsources)) {
+            $datafieldsources = ['' => get_string('nodatafields', 'mod_vimigallery')];
+        }
+        $mform->addElement(
+            'select',
+            'datafieldsource',
+            get_string('datafieldsource', 'mod_vimigallery'),
+            $datafieldsources
+        );
+        $mform->addHelpButton('datafieldsource', 'datafieldsource', 'mod_vimigallery');
+        $mform->hideIf('datafieldsource', 'sourcetype', 'neq', 'datafield');
+
+        // Qtype source: a Quiz activity containing ViMi Pad questions.
+        $quizsources = vimigallery_list_quiz_sources($COURSE->id);
+        if (empty($quizsources)) {
+            $quizsources = ['' => get_string('noquizzes', 'mod_vimigallery')];
+        }
+        $mform->addElement('select', 'qtypesource', get_string('qtypesource', 'mod_vimigallery'), $quizsources);
+        $mform->addHelpButton('qtypesource', 'qtypesource', 'mod_vimigallery');
+        $mform->hideIf('qtypesource', 'sourcetype', 'neq', 'qtype');
+
+        // ViMi Pad source: a ViMi Pad activity in this course.
+        $vimipadsources = vimigallery_list_vimipad_sources($COURSE->id);
+        if (empty($vimipadsources)) {
+            $vimipadsources = ['' => get_string('novimipads', 'mod_vimigallery')];
+        }
+        $mform->addElement('select', 'vimipadsource', get_string('vimipadsource', 'mod_vimigallery'), $vimipadsources);
+        $mform->addHelpButton('vimipadsource', 'vimipadsource', 'mod_vimigallery');
+        $mform->hideIf('vimipadsource', 'sourcetype', 'neq', 'vimipad');
+
+        $mform->addElement('select', 'sourcemode', get_string('sourcemode', 'mod_vimigallery'), [
+            'reference' => get_string('sourcemode_reference', 'mod_vimigallery'),
+            'submissions' => get_string('sourcemode_submissions', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('sourcemode', 'reference');
+        $mform->addHelpButton('sourcemode', 'sourcemode', 'mod_vimigallery');
+        $mform->hideIf('sourcemode', 'sourcetype', 'eq', 'upload');
+        $mform->hideIf('sourcemode', 'sourcetype', 'eq', 'datafield');
+
+        $mform->addElement('select', 'freshness', get_string('freshness', 'mod_vimigallery'), [
+            'live' => get_string('freshness_live', 'mod_vimigallery'),
+            'static' => get_string('freshness_static', 'mod_vimigallery'),
+            'snapshot' => get_string('freshness_snapshot', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('freshness', 'live');
+        $mform->addHelpButton('freshness', 'freshness', 'mod_vimigallery');
+        $mform->hideIf('freshness', 'sourcetype', 'eq', 'upload');
+
+        // Display options.
+    }
+
+    /**
+     * The display section: how the album is presented and what learners may do.
+     *
+     * @param MoodleQuickForm $mform The form being built.
+     * @return void
+     */
+    protected function add_display_elements($mform) {
+        $mform->addElement('header', 'displayheader', get_string('displayheader', 'mod_vimigallery'));
+        $mform->setExpanded('displayheader');
+
+        $mform->addElement('select', 'displaymode', get_string('displaymode', 'mod_vimigallery'), [
+            'page' => get_string('displaymode_page', 'mod_vimigallery'),
+            'course' => get_string('displaymode_course', 'mod_vimigallery'),
+        ]);
+        $mform->setDefault('displaymode', 'page');
+        $mform->addHelpButton('displaymode', 'displaymode', 'mod_vimigallery');
+
+        $mform->addElement('advcheckbox', 'showtabs', get_string('showtabs', 'mod_vimigallery'));
+        $mform->setDefault('showtabs', 1);
+        $mform->addHelpButton('showtabs', 'showtabs', 'mod_vimigallery');
+
+        $mform->addElement('advcheckbox', 'showauthors', get_string('showauthors', 'mod_vimigallery'));
+        $mform->setDefault('showauthors', 0);
+        $mform->addHelpButton('showauthors', 'showauthors', 'mod_vimigallery');
+
+        $mform->addElement('advcheckbox', 'allowcomments', get_string('allowcomments', 'mod_vimigallery'));
+        $mform->addHelpButton('allowcomments', 'allowcomments', 'mod_vimigallery');
+        $mform->setDefault('allowcomments', 0);
+
+        $mform->addElement('advcheckbox', 'enablecompare', get_string('enablecompare', 'mod_vimigallery'));
+        $mform->addHelpButton('enablecompare', 'enablecompare', 'mod_vimigallery');
+        $mform->setDefault('enablecompare', 0);
+    }
+
+    /**
+     * Load the stored source files into the file manager for editing.
+     *
+     * @param array $defaultvalues The default values to prepare.
+     * @return void
+     */
+    public function data_preprocessing(&$defaultvalues) {
+        if ($this->current && !empty($this->current->coursemodule)) {
+            $context = context_module::instance($this->current->coursemodule);
+            $draftitemid = file_get_submitted_draft_itemid('vimijson');
+            file_prepare_draft_area(
+                $draftitemid,
+                $context->id,
+                'mod_vimigallery',
+                'source',
+                0,
+                ['subdirs' => 0, 'maxfiles' => 200, 'maxbytes' => \mod_vimipad\api\value::MAX_BYTES, 'accepted_types' => ['.json']]
+            );
+            $defaultvalues['vimijson'] = $draftitemid;
+        }
+        $this->preset_source_selectors($defaultvalues);
+        $defaultvalues['completioncommentsenabled'] =
+            !empty($defaultvalues['completioncommentsmin']) ? 1 : 0;
+    }
+
+    /**
+     * Preselect the source selector that matches the stored source type.
+     *
+     * @param array $defaultvalues The form defaults, modified in place.
+     * @return void
+     */
+    protected function preset_source_selectors(array &$defaultvalues) {
+        if (empty($this->current->sourcecmid)) {
+            return;
+        }
+        $cmid = $this->current->sourcecmid;
+        $type = $this->current->sourcetype ?? '';
+
+        if (!empty($this->current->sourcefieldid)) {
+            $defaultvalues['datafieldsource'] = $cmid . ':' . $this->current->sourcefieldid;
+        }
+        $selectors = ['qtype' => 'qtypesource', 'vimipad' => 'vimipadsource'];
+        if (isset($selectors[$type])) {
+            $defaultvalues[$selectors[$type]] = $cmid;
+        }
+    }
+
+    /**
+     * Add the comment-count completion rule.
+     *
+     * @return string[] The names of the added rule group elements.
+     */
+    public function add_completion_rules() {
+        $mform = $this->_form;
+        $group = [
+            $mform->createElement(
+                'checkbox',
+                'completioncommentsenabled',
+                '',
+                get_string('completioncomments', 'mod_vimigallery')
+            ),
+            $mform->createElement('text', 'completioncommentsmin', '', ['size' => 3]),
+        ];
+        $mform->setType('completioncommentsmin', PARAM_INT);
+        $mform->addGroup(
+            $group,
+            'completioncommentsgroup',
+            get_string('completioncommentsgroup', 'mod_vimigallery'),
+            [' '],
+            false
+        );
+        $mform->hideIf('completioncommentsmin', 'completioncommentsenabled', 'notchecked');
+        $mform->setDefault('completioncommentsmin', 1);
+        return ['completioncommentsgroup'];
+    }
+
+    /**
+     * Whether any completion rule is enabled.
+     *
+     * @param array $data The submitted form data.
+     * @return bool True if the comment rule is active.
+     */
+    public function completion_rule_enabled($data) {
+        return !empty($data['completioncommentsenabled']) && $data['completioncommentsmin'] > 0;
+    }
+
+    /**
+     * Normalise completion data on submit.
+     *
+     * @return object|null The processed form data.
+     */
+    public function get_data() {
+        $data = parent::get_data();
+        if (!$data) {
+            return $data;
+        }
+        if (!empty($data->completionunlocked)) {
+            $autocompletion = !empty($data->completion)
+                && $data->completion == COMPLETION_TRACKING_AUTOMATIC;
+            if (empty($data->completioncommentsenabled) || !$autocompletion) {
+                $data->completioncommentsmin = 0;
+            }
+        }
+        return $data;
+    }
+}
