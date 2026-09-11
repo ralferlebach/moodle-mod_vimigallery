@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_vimigallery';
-$plugin->version      = 2026091100;
+$plugin->version      = 2026091101;
 $plugin->release      = '1.0.0-RC1';
 $plugin->requires     = 2024100700;   // Moodle 4.5.0 minimum, matching mod_vimipad.
 $plugin->supported    = [405, 502];   // Tested on Moodle 4.5-5.2, like the rest of the ViMi family.
