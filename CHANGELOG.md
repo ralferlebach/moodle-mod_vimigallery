@@ -4,6 +4,11 @@
 
 First release candidate. Maturity raised to MATURITY_RC.
 
+
+### Added
+- Playwright user-story suite (Teacher, Student) with a seed, a workflow and a
+  video recorded on every run, success included. See tests/playwright and the
+  family-wide ViMi_User_Stories.md.
 ### Fixed
 - A test comment started lowercase, which the strict CI lint (moodle-cs) rejects;
   the local check had silently passed because the moodle standard was not
@@ -306,7 +311,6 @@ First beta. Maturity raised from ALPHA to BETA.
   step; qtype currently returns reference only).
 - All three source adapters (datafield, qtype, vimipad) are covered by the shared
   factory and normalised source interface.
-### Added
 - mod_vimipad source: a gallery can draw from a ViMi Pad activity, showing either
   its model solution (reference mode, graders only live) or the submitted maps
   (submissions mode). Submissions follow the activity access rules: a learner sees
