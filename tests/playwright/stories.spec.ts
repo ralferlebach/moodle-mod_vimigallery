@@ -45,13 +45,15 @@ test.describe('mod_vimigallery - Teacher stories', () => {
         await login(page, env.baseURL, env.teacher);
         await page.goto(`${env.baseURL}/mod/vimigallery/arrange.php?id=${env.cmid}&lang=en`);
 
-        // The arrange page lists the maps with hide/show controls. Hide the first
-        // one that can be hidden.
-        const hide = page.getByRole('button', {name: /Hide/i}).first();
-        await expect(hide).toBeVisible({timeout: 20_000});
-        await hide.click();
-        // Back on arrange, that row now offers "Show", proving the state flipped.
-        await expect(page.getByRole('button', {name: /Show/i}).first()).toBeVisible({timeout: 20_000});
+        // Each map row carries a hide form (a button submitting action=hide via a
+        // hidden input). Target that form's submit button - stable across themes
+        // and languages, unlike the icon's accessible name.
+        const hideForm = page.locator('form:has(input[name="action"][value="hide"])').first();
+        await expect(hideForm).toBeVisible({timeout: 20_000});
+        await hideForm.locator('button').click();
+        // After hiding, that row now offers a show form, proving the state flipped.
+        await expect(page.locator('form:has(input[name="action"][value="show"])').first())
+            .toBeVisible({timeout: 20_000});
     });
 });
 
@@ -80,8 +82,17 @@ test.describe('mod_vimigallery - Student stories', () => {
         const left = page.locator('#cmpleft');
         const right = page.locator('#cmpright');
         await expect(left).toBeVisible({timeout: 20_000});
-        await left.selectOption({index: 1});
-        await right.selectOption({index: 2});
+        // The first option is the "Choose a map..." placeholder; real maps follow.
+        // Wait until at least two real maps are available, then select by value so
+        // the choice does not depend on option order.
+        await expect
+            .poll(async () => left.locator('option').count(), {timeout: 20_000})
+            .toBeGreaterThanOrEqual(3);
+        const values: string[] = await left.locator('option').evaluateAll(
+            (els) => els.map((el) => (el as HTMLOptionElement).value).filter((v) => v !== '')
+        );
+        await left.selectOption(values[0]);
+        await right.selectOption(values[1]);
         await page.getByRole('button', {name: /Compare/i}).click();
 
         // Both read-only panes render.
