@@ -52,7 +52,14 @@ test.describe('mod_vimigallery - Teacher stories', () => {
         await expect(hideForm).toBeVisible({timeout: 20_000});
         await hideForm.locator('button').click();
         // After hiding, that row now offers a show form, proving the state flipped.
-        await expect(page.locator('form:has(input[name="action"][value="show"])').first())
+        const showForm = page.locator('form:has(input[name="action"][value="show"])').first();
+        await expect(showForm).toBeVisible({timeout: 20_000});
+
+        // Restore visibility. The suite runs serially against one gallery, so a
+        // map left hidden here would disappear from the compare selectors and
+        // break the later comparison story.
+        await showForm.locator('button').click();
+        await expect(page.locator('form:has(input[name="action"][value="hide"])').first())
             .toBeVisible({timeout: 20_000});
     });
 });
@@ -85,8 +92,13 @@ test.describe('mod_vimigallery - Student stories', () => {
         // The first option is the "Choose a map..." placeholder; real maps follow.
         // Wait until at least two real maps are available, then select by value so
         // the choice does not depend on option order.
+        // One placeholder option plus the gallery's maps. The seed creates two,
+        // so at least three options must be present before selecting.
         await expect
-            .poll(async () => left.locator('option').count(), {timeout: 20_000})
+            .poll(async () => left.locator('option').count(), {
+                timeout: 20_000,
+                message: 'compare selector should offer the placeholder plus at least two maps',
+            })
             .toBeGreaterThanOrEqual(3);
         const values: string[] = await left.locator('option').evaluateAll(
             (els) => els.map((el) => (el as HTMLOptionElement).value).filter((v) => v !== '')
