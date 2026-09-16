@@ -5,7 +5,18 @@
 First release candidate. Maturity raised to MATURITY_RC.
 
 
+
+### Fixed
+- A gallery set to "On the course page" broke the course page with "Cannot set
+  this data from _cm_info_view". set_no_view_link() may only be called before the
+  course module reaches its dynamic state; it now runs in
+  vimigallery_cm_info_dynamic(). The failure took down the whole course page for
+  every participant, not just the activity.
+
 ### Added
+- PHPUnit tests (tests/course_callbacks_test.php) and a Behat scenario covering
+  the callbacks Moodle core runs while rendering the course page. Earlier tests
+  only called the plugin directly, so this path was never exercised.
 - Playwright user-story suite (Teacher, Student) with a seed, a workflow and a
   video recorded on every run, success included. See tests/playwright and the
   family-wide ViMi_User_Stories.md.

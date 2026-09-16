@@ -537,18 +537,37 @@ function vimigallery_get_coursemodule_info($coursemodule) {
 }
 
 /**
- * Dynamic course-page rendering. In course display mode the gallery is embedded
- * directly (like a label) with no link; in page mode the normal link is kept.
+ * Drop the activity link when the gallery is embedded in the course page.
+ *
+ * @param cm_info $cm The course module.
+ * @return void
+ */
+function vimigallery_cm_info_dynamic(cm_info $cm) {
+    global $DB;
+
+    // Read the display mode straight from the database rather than through
+    // $cm->customdata: the accessor for that calls obtain_dynamic_data(), which
+    // is what is running right now, so using it here recurses.
+    $displaymode = $DB->get_field('vimigallery', 'displaymode', ['id' => $cm->instance]);
+    if ($displaymode !== 'course') {
+        return;
+    }
+
+    // The set_no_view_link() call may only happen before the course module reaches
+    // its dynamic state, i.e. from _cm_info_dynamic and never from _cm_info_view.
+    // Calling it there raises "Cannot set this data from _cm_info_view", which
+    // aborts rendering of the whole course page, not just this activity.
+    $cm->set_no_view_link();
+}
+
+/**
+ * Embed the album into the course page when the activity is shown inline.
  *
  * @param cm_info $cm The course module.
  * @return void
  */
 function vimigallery_cm_info_view(cm_info $cm) {
-    $customdata = $cm->customdata;
-    $displaymode = is_array($customdata) && isset($customdata['displaymode'])
-        ? $customdata['displaymode'] : 'page';
-
-    if ($displaymode !== 'course') {
+    if (vimigallery_display_mode($cm) !== 'course') {
         return;
     }
 
@@ -556,5 +575,16 @@ function vimigallery_cm_info_view(cm_info $cm) {
     $output = new \mod_vimigallery\output\gallery($cm);
     $html = $PAGE->get_renderer('mod_vimigallery')->render($output);
     $cm->set_content($html, true);
-    $cm->set_no_view_link();
+}
+
+/**
+ * Read the configured display mode from the course module's cached custom data.
+ *
+ * @param cm_info $cm The course module.
+ * @return string Either 'course' or 'page'.
+ */
+function vimigallery_display_mode(cm_info $cm): string {
+    $customdata = $cm->customdata;
+    return is_array($customdata) && isset($customdata['displaymode'])
+        ? (string) $customdata['displaymode'] : 'page';
 }

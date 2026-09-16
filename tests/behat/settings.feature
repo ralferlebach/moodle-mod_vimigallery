@@ -31,3 +31,14 @@ Feature: Configure a ViMi Gallery activity
     Then I should see "Allow comments on maps"
     And I should see "Enable side-by-side comparison"
     And I should see "Require comments"
+
+  Scenario: A gallery embedded in the course page does not break the course page
+    Given the following "activities" exist:
+      | activity     | name         | course | idnumber | displaymode |
+      | vimigallery  | Inline album | C1     | gal2     | course      |
+    When I am on the "Course 1" course page logged in as teacher1
+    # An embedded gallery drops its activity link, so assert the course page
+    # itself survived rather than looking for the link.
+    Then I should not see "Coding error detected"
+    And I should not see "Cannot set this data from _cm_info_view"
+    And I should not see "Exception"
