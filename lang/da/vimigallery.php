@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'Studerendes besvarelser';
 $string['sourcetype'] = 'Kortkilde';
 $string['sourcetype_help'] = 'Uploadede filer: et eller flere eksporterede JSON-kort. Et felt i en Database-aktivitet: de ViMi Pad-værdier, der er gemt på tværs af posterne i en Database-aktivitet.';
 $string['vimigallery:addinstance'] = 'Tilføj et nyt ViMi Galleri';
+$string['vimigallery:comment'] = 'Kommentere kort i et ViMi-galleri';
 $string['vimigallery:manageitems'] = 'Kurater kortene i et ViMi Galleri';
 $string['vimigallery:view'] = 'Se et ViMi Galleri';
 $string['vimipadsource'] = 'ViMi Pad-aktivitet';

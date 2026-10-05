@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = '학습자 제출물';
 $string['sourcetype'] = '맵 원본';
 $string['sourcetype_help'] = '업로드한 파일: 내보낸 JSON 맵 하나 이상. 「데이터베이스」 활동의 필드: 「데이터베이스」 활동의 항목 전반에 저장된 ViMi Pad 값.';
 $string['vimigallery:addinstance'] = '새 ViMi 갤러리 추가';
+$string['vimigallery:comment'] = 'ViMi 갤러리의 맵에 댓글 달기';
 $string['vimigallery:manageitems'] = 'ViMi 갤러리의 맵 큐레이션';
 $string['vimigallery:view'] = 'ViMi 갤러리 보기';
 $string['vimipadsource'] = 'ViMi Pad 활동';

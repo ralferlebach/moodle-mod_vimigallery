@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'Inzendingen van deelnemers';
 $string['sourcetype'] = 'Kaartbron';
 $string['sourcetype_help'] = 'Geüploade bestanden: een of meer geëxporteerde JSON-kaarten. Een veld van een Database-activiteit: de ViMi Pad-waarden die over de vermeldingen van een Database-activiteit zijn opgeslagen.';
 $string['vimigallery:addinstance'] = 'Een nieuwe ViMi Galerij toevoegen';
+$string['vimigallery:comment'] = 'Reageren op kaarten in een ViMi-galerij';
 $string['vimigallery:manageitems'] = 'De kaarten in een ViMi Galerij cureren';
 $string['vimigallery:view'] = 'Een ViMi Galerij bekijken';
 $string['vimipadsource'] = 'ViMi Pad-activiteit';

@@ -103,6 +103,7 @@ $string['sourcemode_submissions'] = 'Learner submissions';
 $string['sourcetype'] = 'Map source';
 $string['sourcetype_help'] = 'Uploaded files: one or more exported JSON maps. A Database activity field: the ViMi Pad values stored across the entries of a Database activity.';
 $string['vimigallery:addinstance'] = 'Add a new ViMi Gallery';
+$string['vimigallery:comment'] = 'Comment on maps in a ViMi Gallery';
 $string['vimigallery:manageitems'] = 'Curate the maps in a ViMi Gallery';
 $string['vimigallery:view'] = 'View a ViMi Gallery';
 $string['vimipadsource'] = 'ViMi Pad activity';

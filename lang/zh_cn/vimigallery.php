@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = '学员提交';
 $string['sourcetype'] = '图来源';
 $string['sourcetype_help'] = '已上传的文件：一个或多个导出的 JSON 图。某个“数据库”活动的字段：跨“数据库”活动各条目存储的 ViMi Pad 值。';
 $string['vimigallery:addinstance'] = '添加新的 ViMi 画廊';
+$string['vimigallery:comment'] = '在 ViMi 画廊中评论地图';
 $string['vimigallery:manageitems'] = '策展 ViMi 画廊中的图';
 $string['vimigallery:view'] = '查看 ViMi 画廊';
 $string['vimipadsource'] = 'ViMi Pad 活动';

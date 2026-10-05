@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = '受講者の提出物';
 $string['sourcetype'] = 'マップソース';
 $string['sourcetype_help'] = 'アップロードしたファイル：エクスポートした 1 つ以上の JSON マップ。「データベース」活動のフィールド：「データベース」活動の項目全体に保存された ViMi Pad の値。';
 $string['vimigallery:addinstance'] = '新しい ViMi ギャラリーを追加';
+$string['vimigallery:comment'] = 'ViMi ギャラリーのマップにコメントする';
 $string['vimigallery:manageitems'] = 'ViMi ギャラリーのマップをキュレーション';
 $string['vimigallery:view'] = 'ViMi ギャラリーを表示';
 $string['vimipadsource'] = 'ViMi Pad 活動';

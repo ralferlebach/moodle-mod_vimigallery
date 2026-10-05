@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'Роботи студентів';
 $string['sourcetype'] = 'Джерело карт';
 $string['sourcetype_help'] = 'Завантажені файли: одна або кілька експортованих карт JSON. Поле діяльності «База даних»: значення ViMi Pad, збережені в записах діяльності «База даних».';
 $string['vimigallery:addinstance'] = 'Додати нову Галерею ViMi';
+$string['vimigallery:comment'] = 'Коментувати карти в галереї ViMi';
 $string['vimigallery:manageitems'] = 'Курувати карти в Галереї ViMi';
 $string['vimigallery:view'] = 'Переглянути Галерею ViMi';
 $string['vimipadsource'] = 'Діяльність ViMi Pad';

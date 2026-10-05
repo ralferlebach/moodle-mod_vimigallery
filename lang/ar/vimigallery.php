@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'تسليمات المتعلمين';
 $string['sourcetype'] = 'مصدر الخرائط';
 $string['sourcetype_help'] = 'ملفات مرفوعة: خريطة JSON مُصدَّرة واحدة أو أكثر. حقل نشاط «قاعدة بيانات»: قيم ViMi Pad المحفوظة عبر مُدخلات نشاط «قاعدة بيانات».';
 $string['vimigallery:addinstance'] = 'إضافة معرض ViMi جديد';
+$string['vimigallery:comment'] = 'التعليق على الخرائط في معرض ViMi';
 $string['vimigallery:manageitems'] = 'تنظيم خرائط معرض ViMi';
 $string['vimigallery:view'] = 'عرض معرض ViMi';
 $string['vimipadsource'] = 'نشاط ViMi Pad';

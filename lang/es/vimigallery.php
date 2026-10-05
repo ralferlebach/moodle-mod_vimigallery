@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'Entregas de los estudiantes';
 $string['sourcetype'] = 'Fuente de mapas';
 $string['sourcetype_help'] = 'Archivos subidos: uno o más mapas JSON exportados. Un campo de actividad Base de datos: los valores ViMi Pad almacenados en las entradas de una actividad Base de datos.';
 $string['vimigallery:addinstance'] = 'Añadir una nueva Galería ViMi';
+$string['vimigallery:comment'] = 'Comentar mapas en una galería ViMi';
 $string['vimigallery:manageitems'] = 'Curar los mapas de una Galería ViMi';
 $string['vimigallery:view'] = 'Ver una Galería ViMi';
 $string['vimipadsource'] = 'Actividad ViMi Pad';

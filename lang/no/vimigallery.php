@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'Deltakernes besvarelser';
 $string['sourcetype'] = 'Kartkilde';
 $string['sourcetype_help'] = 'Opplastede filer: ett eller flere eksporterte JSON-kart. Et felt i en Database-aktivitet: ViMi Pad-verdiene som er lagret på tvers av oppføringene i en Database-aktivitet.';
 $string['vimigallery:addinstance'] = 'Legg til et nytt ViMi Galleri';
+$string['vimigallery:comment'] = 'Kommentere kart i et ViMi-galleri';
 $string['vimigallery:manageitems'] = 'Kurater kartene i et ViMi Galleri';
 $string['vimigallery:view'] = 'Se et ViMi Galleri';
 $string['vimipadsource'] = 'ViMi Pad-aktivitet';

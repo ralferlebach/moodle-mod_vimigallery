@@ -106,6 +106,7 @@ $string['sourcemode_submissions'] = 'Travaux des apprenants';
 $string['sourcetype'] = 'Source des cartes';
 $string['sourcetype_help'] = 'Fichiers téléversés : une ou plusieurs cartes JSON exportées. Un champ d’activité Base de données : les valeurs ViMi Pad enregistrées dans les entrées d’une activité Base de données.';
 $string['vimigallery:addinstance'] = 'Ajouter une nouvelle Galerie ViMi';
+$string['vimigallery:comment'] = 'Commenter les cartes dans une galerie ViMi';
 $string['vimigallery:manageitems'] = 'Organiser les cartes d’une Galerie ViMi';
 $string['vimigallery:view'] = 'Consulter une Galerie ViMi';
 $string['vimipadsource'] = 'Activité ViMi Pad';
