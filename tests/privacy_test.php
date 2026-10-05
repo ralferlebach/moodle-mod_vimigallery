@@ -352,4 +352,58 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
         $this->assertEquals(0, $DB->count_records('vimigallery_item_user', ['itemid' => $group, 'userid' => $a->id]));
         $this->assertEquals(1, $DB->count_records('vimigallery_item_user', ['itemid' => $group, 'userid' => $b->id]));
     }
+
+    /**
+     * Bulk deletion follows the same shared-data rule as a single deletion.
+     *
+     * Removing several users at once must not take down a group map that other
+     * contributors still own, while everything that belongs to the removed users
+     * alone - their own maps, their comments, their contributor links - goes.
+     *
+     * @return void
+     */
+    public function test_bulk_delete_respects_shared_maps(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$context, $cm] = $this->make();
+        $a = $this->getDataGenerator()->create_user();
+        $b = $this->getDataGenerator()->create_user();
+        $c = $this->getDataGenerator()->create_user();
+
+        // A group map shared by all three, and one individual map each for a and c.
+        $group = $this->add_item($cm, null, [(int) $a->id, (int) $b->id, (int) $c->id], 'vp-group');
+        $owna = $this->add_item($cm, (int) $a->id, [], 'vp-a');
+        $ownc = $this->add_item($cm, (int) $c->id, [], 'vp-c');
+        \mod_vimigallery\local\comment_service::post($cm, $group, (int) $a->id, 'from a');
+        \mod_vimigallery\local\comment_service::post($cm, $group, (int) $b->id, 'from b');
+
+        // Remove a and b together; c is not part of the request.
+        $userlist = new \core_privacy\local\request\approved_userlist(
+            $context,
+            'mod_vimigallery',
+            [(int) $a->id, (int) $b->id]
+        );
+        provider::delete_data_for_users($userlist);
+
+        // The shared map survives because c still contributed to it.
+        $this->assertTrue($DB->record_exists('vimigallery_item', ['id' => $group]), 'the shared map survives');
+        $this->assertEquals(0, $DB->count_records_select(
+            'vimigallery_item_user',
+            'itemid = ? AND userid IN (?, ?)',
+            [$group, $a->id, $b->id]
+        ), 'the removed users are unlinked');
+        $this->assertEquals(1, $DB->count_records('vimigallery_item_user', ['itemid' => $group, 'userid' => $c->id]));
+
+        // What belonged to a alone is gone; c's own map is untouched.
+        $this->assertFalse($DB->record_exists('vimigallery_item', ['id' => $owna]));
+        $this->assertTrue($DB->record_exists('vimigallery_item', ['id' => $ownc]));
+
+        // Both removed users' comments are gone.
+        $this->assertEquals(0, $DB->count_records_select(
+            'vimigallery_comment',
+            'galleryid = ? AND userid IN (?, ?)',
+            [$cm->instance, $a->id, $b->id]
+        ));
+    }
 }
