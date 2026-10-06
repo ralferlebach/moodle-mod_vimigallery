@@ -1,6 +1,21 @@
 # Changelog — mod_vimigallery
 
 
+
+## Unreleased
+
+### Added
+- Plugin logo added as pix/mod_vimigallery-icon-color-200.png and .svg. The
+  existing pix/monologo.svg is kept.
+
+### Changed
+- The gallery has its own icon. Until now pix/icon.svg was a generic picture
+  pictogram from the initial commit, so the activity chooser showed something
+  that looked like a stock icon rather than part of the ViMi family. The new
+  pix/monologo.svg - the name Moodle has used for activity icons since 4.0 -
+  shows stacked image cards with the ViMi network motif, drawn in the same
+  stroke and grid as mod_vimipad's icon.
+
 ## 1.0.0 (2026-10-05)
 
 ### Changed
