@@ -5,6 +5,11 @@
 ## Unreleased
 
 ### Added
+- A display-check gallery in the Playwright seed holds one map in snapshot
+  shape, and story D1 checks that it is drawn at its stored positions, with its
+  arrowheads and without editing tools.
+
+### Added
 - Plugin logo added as pix/mod_vimigallery-icon-color-200.png and .svg. The
   existing pix/monologo.svg is kept.
 

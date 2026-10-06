@@ -29,6 +29,8 @@ export interface GalleryEnv {
     cmid: string;
     teacher: TestUser;
     student: TestUser;
+    /** Path to the display-check gallery, or '' when not seeded. */
+    displayPath: string;
 }
 
 /**
@@ -51,6 +53,9 @@ export function readEnv(): GalleryEnv {
     return {
         baseURL: process.env.VIMIGALLERY_BASE_URL ?? 'http://localhost:8000',
         galleryPath: need('VIMIGALLERY_PATH'),
+        // The gallery holding one map in snapshot shape; optional so an older
+        // seed still runs the other stories.
+        displayPath: process.env.VIMIGALLERY_DISPLAY_PATH ?? '',
         cmid: need('VIMIGALLERY_CMID'),
         teacher: {
             username: need('VIMIGALLERY_TEACHER'),

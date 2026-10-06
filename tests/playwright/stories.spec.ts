@@ -111,3 +111,40 @@ test.describe('mod_vimigallery - Student stories', () => {
         await expect(page.locator('.vimigallery-compare-pane')).toHaveCount(2, {timeout: 30_000});
     });
 });
+
+test.describe('mod_vimigallery - a map is shown as its author drew it', () => {
+    test.skip(env.displayPath === '', 'No display-check gallery seeded.');
+
+    // The display gallery holds a map in snapshot shape: positions decoded under
+    // "layout", directions as the database string "1". A gallery once redrew such
+    // a map with an invented layout and without arrowheads.
+    test('D1 - positions and arrowheads match the stored map', async ({page}) => {
+        await login(page, env.baseURL, env.student);
+        await page.goto(`${env.baseURL}${env.displayPath}&lang=en`);
+
+        const node = (label: string) => page.locator('.vimipad-canvas-node', {hasText: label}).first();
+        await expect(node('Pump')).toBeVisible({timeout: 30_000});
+
+        // The three nodes were stored on one horizontal line, left to right. No
+        // fallback layout produces that, so this fails if the stored positions
+        // were not used.
+        const centre = async (label: string) => {
+            const box = (await node(label).boundingBox())!;
+            return {x: box.x + box.width / 2, y: box.y + box.height / 2};
+        };
+        const pump = await centre('Pump');
+        const valve = await centre('Valve');
+        const tank = await centre('Tank');
+        expect(Math.abs(pump.y - valve.y)).toBeLessThan(4);
+        expect(Math.abs(valve.y - tank.y)).toBeLessThan(4);
+        expect(pump.x).toBeLessThan(valve.x);
+        expect(valve.x).toBeLessThan(tank.x);
+
+        // Both relations are directed and must keep their arrowheads.
+        await expect(page.locator('svg.vimipad-canvas [marker-end]')).toHaveCount(2);
+
+        // A viewer gets no editing form.
+        await expect(page.locator('#vimipad-node-label')).toHaveCount(0);
+    });
+});
+

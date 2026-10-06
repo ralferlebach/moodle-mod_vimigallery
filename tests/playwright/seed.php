@@ -129,10 +129,77 @@ foreach ([['Water cycle', 'a'], ['Food web', 'b']] as $i => $pair) {
     ]);
 }
 
+// A second gallery holding one map in exactly the shape a submitted snapshot
+// has, for the display story: the positions decoded under "layout" in the v1
+// layout format, and the relation fields as the database returns them, so the
+// direction is the string "1". A gallery once redrew such a map with an invented
+// layout and without arrowheads. The three nodes sit on one horizontal line,
+// which no fallback layout would produce.
+$display = add_moduleinfo((object) [
+    'modulename' => 'vimigallery',
+    'module' => $module->id,
+    'course' => $course->id,
+    'section' => 1,
+    'visible' => 1,
+    'name' => 'Display check',
+    'intro' => '',
+    'introformat' => FORMAT_HTML,
+    'displaymode' => 'page',
+    'showtabs' => 1,
+    'showauthors' => 1,
+    'sourcetype' => 'upload',
+    'freshness' => 'live',
+    'sourcemode' => 'reference',
+    'allowcomments' => 0,
+    'enablecompare' => 0,
+    'completioncommentsmin' => 0,
+], $course);
+$ids = ['pump' => 'node_aaaaaaaaaaa1', 'valve' => 'node_aaaaaaaaaaa2', 'tank' => 'node_aaaaaaaaaaa3'];
+$snapshotmap = json_encode([
+    'profile' => 'conceptmap',
+    'revision' => '3',
+    'nodes' => [
+        ['stableid' => $ids['pump'], 'type' => 'concept', 'label' => 'Pump', 'metadatajson' => '{}'],
+        ['stableid' => $ids['valve'], 'type' => 'concept', 'label' => 'Valve', 'metadatajson' => '{}'],
+        ['stableid' => $ids['tank'], 'type' => 'concept', 'label' => 'Tank', 'metadatajson' => '{}'],
+    ],
+    'relations' => [
+        ['stableid' => 'rel_aaaaaaaaaaa1', 'sourceid' => $ids['pump'], 'targetid' => $ids['valve'],
+            'type' => '', 'label' => 'feeds', 'direction' => '1', 'metadatajson' => '{}'],
+        ['stableid' => 'rel_aaaaaaaaaaa2', 'sourceid' => $ids['valve'], 'targetid' => $ids['tank'],
+            'type' => '', 'label' => 'fills', 'direction' => '1', 'metadatajson' => '{}'],
+    ],
+    'containers' => [],
+    'layout' => [
+        'v' => 1,
+        'pos' => [
+            $ids['pump'] => ['x' => 700, 'y' => 800],
+            $ids['valve'] => ['x' => 1200, 'y' => 800],
+            $ids['tank'] => ['x' => 1700, 'y' => 800],
+        ],
+        'size' => (object) [],
+    ],
+]);
+$DB->insert_record('vimigallery_item', (object) [
+    'galleryid' => (int) $display->instance,
+    'sortorder' => 0,
+    'visible' => 1,
+    'sourcetype' => 'upload',
+    'profile' => 'conceptmap',
+    'mapjson' => $snapshotmap,
+    'authorname' => 'Author S',
+    'contenthash' => sha1('snapshot-shape'),
+    'sourceuserid' => null,
+    'sourcekey' => 'upload:snapshot',
+    'timecreated' => $now,
+]);
+$displaypath = '/mod/vimigallery/view.php?id=' . (int) $display->coursemodule;
+
 $path = '/mod/vimigallery/view.php?id=' . $cmid;
 
 echo "export VIMIGALLERY_BASE_URL='{$CFG->wwwroot}'\n";
 echo "export VIMIGALLERY_PATH='{$path}'\n";
+echo "export VIMIGALLERY_DISPLAY_PATH='{$displaypath}'\n";
 echo "export VIMIGALLERY_CMID='{$cmid}'\n";
 echo "export VIMIGALLERY_TEACHER='{$teacher->username}'\n";
 echo "export VIMIGALLERY_TEACHER_PASS='Vimi!gal_T1'\n";
